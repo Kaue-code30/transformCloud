@@ -65,21 +65,6 @@ export default function PlatformSection() {
             </div>
           ))}
         </div>
-
-        {/* Social proof bar */}
-        <div className="mt-16 sm:mt-20 flex flex-wrap items-center justify-center gap-6 sm:gap-10 py-8 sm:py-10 border-t border-b border-white/5">
-          {[
-            { val: "2000+", label: "apps deployados" },
-            { val: "99.99%", label: "uptime garantido" },
-            { val: "50%", label: "redução de custos" },
-            { val: "15+", label: "anos de mercado" },
-          ].map((s) => (
-            <div key={s.label} className="text-center">
-              <div className="text-xl sm:text-2xl font-black text-white">{s.val}</div>
-              <div className="text-xs text-[#555] mt-0.5">{s.label}</div>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   );
