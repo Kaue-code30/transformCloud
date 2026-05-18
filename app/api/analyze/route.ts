@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import type { MessageParam } from "@anthropic-ai/sdk/resources/messages/messages";
+
+export const maxDuration = 120; // segundos — necessário para análises com web_search
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -9,7 +12,7 @@ SEU PERFIL E AUTORIDADE:
 - Certificação CFA (Chartered Financial Analyst) desde 2018 — você aplica rigor analítico de nível institucional a decisões de infraestrutura
 - Especialização em FinOps, cloud cost optimization e migração de infraestrutura
 - Experiência prática com migrações de workloads reais (referência: NeoTrust/Confi Group — 17TB migrados para OCI, 50% de redução de custos)
-- Parceria Oracle OPN — benchmarks rigorosos comprovam OCI com performance superior a custo menor
+- Análise imparcial dos 4 principais provedores — a recomendação segue os dados de pricing real, não parceria comercial
 - Visão de mercado: 72% das empresas estouraram budget de cloud em 2025; você resolve isso
 
 TOM DE VOZ — Mario Perino / Quave ONE:
@@ -19,6 +22,16 @@ TOM DE VOZ — Mario Perino / Quave ONE:
 - Zero lock-in como valor central — empodere o cliente a decidir com dados, não com medo
 - Use "sua infraestrutura", "seu workload", "sua decisão" — personalizado, nunca genérico
 - Nunca use: "é importante notar que", "vale ressaltar", "cabe mencionar"
+
+INSTRUÇÃO DE PESQUISA — OBRIGATÓRIA:
+Antes de calcular qualquer estimativa de custo, você DEVE usar a ferramenta web_search para buscar os preços atuais dos serviços identificados no billing. Faça buscas específicas como:
+- "AWS EC2 pricing [tipo de instância] 2025 on-demand"
+- "GCP Compute Engine pricing [tipo] 2025"
+- "Azure Virtual Machines pricing 2025"
+- "OCI Compute pricing 2025"
+- "site:aws.amazon.com/pricing" ou "site:cloud.google.com/pricing" para fontes oficiais
+
+Busque sempre nos sites oficiais dos provedores (aws.amazon.com, cloud.google.com, azure.microsoft.com, oracle.com/cloud). Use os preços encontrados para calibrar seus multiplicadores — NÃO use valores fixos memorizados.
 
 ESTRUTURA DA ANÁLISE — retorne EXATAMENTE este JSON sem texto antes ou depois:
 
@@ -86,8 +99,20 @@ REGRAS — serviceComparison:
 - Agrupe serviços similares (EC2+ECS+EKS → "Compute", RDS+Aurora → "Database", etc.)
 - Máximo 8 linhas, ordenadas por custo decrescente
 - aws/gcp/azure/oci = custo equivalente estimado naquele provedor
-- Multiplicadores base: AWS 1.0x · GCP 0.78x · Azure 0.88x · OCI 0.60x
-- Ajuste por tipo: OCI melhor em Compute/Storage, pior em ML/Serverless proprietário; GCP melhor em BigQuery/ML; Azure melhor em enterprise/AD
+- Priorize os preços encontrados na pesquisa web. Se não encontrar, use os multiplicadores de referência abaixo:
+
+  COMPUTE (x86 VM):        GCP 0.88x · Azure 0.92x · OCI 0.82x
+  COMPUTE (ARM/Ampere):    GCP 0.75x · Azure N/A   · OCI 0.55x
+  KUBERNETES (control):    GCP 0.75x · Azure 0.80x · OCI 0.60x
+  DATABASE (gerenciado):   GCP 0.82x · Azure 0.88x · OCI 0.75x
+  OBJECT STORAGE:          GCP 0.87x · Azure 0.78x · OCI 1.11x
+  EGRESS/TRANSFERÊNCIA:    GCP 0.89x · Azure 0.97x · OCI 0.05x
+  ML / AI:                 GCP 0.75x · Azure 0.88x · OCI 0.85x
+  SERVERLESS / FUNCTIONS:  GCP 0.70x · Azure 0.75x · OCI 0.90x
+  CDN / REDE:              GCP 0.85x · Azure 0.90x · OCI 0.60x
+  MONITORAMENTO / LOGGING: GCP 0.80x · Azure 0.85x · OCI 0.50x
+
+- Pontos fortes reais: GCP lidera em ML/BigQuery/Serverless; Azure lidera em enterprise/AD/Windows; OCI lidera em egress e ARM Compute; AWS lidera em ecossistema e serviços gerenciados
 
 REGRAS — freeTierOpportunities:
 - Verifique TODOS os serviços do billing contra os free tiers conhecidos dos 4 provedores:
@@ -121,6 +146,21 @@ REGRAS — summary (2-3 frases):
 - Segunda frase: a oportunidade (quanto e onde)
 - Terceira frase (opcional): o próximo passo concreto`;
 
+const WEB_SEARCH_TOOL: Anthropic.Messages.WebSearchTool20250305 = {
+  type: "web_search_20250305",
+  name: "web_search",
+  max_uses: 4,
+  allowed_domains: [
+    "aws.amazon.com",
+    "cloud.google.com",
+    "azure.microsoft.com",
+    "oracle.com",
+    "cloudprice.net",
+    "infracost.io",
+    "banzaicloud.com",
+  ],
+};
+
 export async function POST(req: NextRequest) {
   try {
     const { content, filename } = await req.json();
@@ -132,38 +172,58 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Arquivo muito grande. Máximo 400KB de texto." }, { status: 413 });
     }
 
-    const message = await client.messages.create({
-      model: "claude-opus-4-7",
-      max_tokens: 8000,
-      thinking: { type: "adaptive" },
+    const messages: MessageParam[] = [
+      {
+        role: "user",
+        content: `Analise este arquivo de billing cloud e gere o JSON completo conforme especificado.\nArquivo: ${filename || "billing.csv"}\n\nConteúdo:\n${content}`,
+      },
+    ];
+
+    // web_search_20250305 é server-side: Anthropic executa as buscas automaticamente.
+    // thinking não é combinado com web_search — removido para evitar conflito.
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 16000,
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Analise este arquivo de billing cloud e gere o JSON completo conforme especificado.\nArquivo: ${filename || "billing.csv"}\n\nConteúdo:\n${content}`,
-        },
-      ],
+      tools: [WEB_SEARCH_TOOL],
+      messages,
     });
 
-    const textBlock = message.content.find((b) => b.type === "text");
+    const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       return NextResponse.json({ error: "Resposta inválida do modelo." }, { status: 500 });
     }
 
-    const jsonMatch = textBlock.text.trim().match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    const raw = textBlock.text.trim();
+
+    // Remove possível bloco markdown ```json ... ```
+    const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+    // Extrai o JSON mais externo (primeiro { até o } correspondente)
+    const start = stripped.indexOf("{");
+    const end = stripped.lastIndexOf("}");
+    if (start === -1 || end === -1) {
       return NextResponse.json(
         { error: "Não foi possível extrair dados. Verifique se é um arquivo de billing válido." },
         { status: 422 }
       );
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const jsonStr = stripped.slice(start, end + 1);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      console.error("[analyze] JSON inválido recebido do modelo:", jsonStr.slice(0, 500));
+      return NextResponse.json(
+        { error: "O modelo retornou uma resposta em formato inesperado. Tente novamente." },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(parsed);
   } catch (err: unknown) {
-    if (err instanceof SyntaxError) {
-      return NextResponse.json({ error: "Erro ao interpretar resposta do modelo." }, { status: 500 });
-    }
     if (err instanceof Anthropic.APIError) {
       return NextResponse.json({ error: `Erro na API: ${err.message}` }, { status: err.status ?? 500 });
     }
