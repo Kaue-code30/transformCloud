@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-/* ── CSS VARIABLES (fora de layer — correto) ─ */
+/* ── CSS VARIABLES ─────────────────────────── */
 :root {
+  /* Landing / auth — sempre dark */
   --bg: #0f0f0f;
   --bg2: #161616;
   --bg3: #1e1e1e;
@@ -13,6 +14,50 @@
   --text: #ffffff;
   --text2: #a3a3a3;
   --text3: #666;
+
+  /* Dashboard — tokens dark (mesmas cores originais do projeto) */
+  --ds-accent:     #b3fe71;
+  --ds-bg:         #1a1a1a;
+  --ds-surface:    #1a1a1a;
+  --ds-card:       #161616;
+  --ds-card-alt:   #242424;
+  --ds-border:     #2a2a2a;
+  --ds-border-md:  #333333;
+  --ds-border-sub: #222222;
+  --ds-text:       #ffffff;
+  --ds-text-2:     #a3a3a3;
+  --ds-text-3:     #666666;
+  --ds-text-4:     #444444;
+  --ds-text-5:     #555555;
+  --ds-muted:      #cccccc;
+  --ds-hover:      rgba(255,255,255,0.03);
+  --ds-grid:       #1e1e1e;
+  --ds-bar-bg:     #0f0f0f;
+  --ds-tooltip-bg: #161616;
+  --ds-empty-bg:   #0a0a0a;
+}
+
+/* ── TEMA CLARO DO DASHBOARD ─────────────────── */
+.ds-light {
+  --ds-accent:    #3a7d00;
+  --ds-bg:        #f0f2f5;
+  --ds-surface:   #e8eaed;
+  --ds-card:      #ffffff;
+  --ds-card-alt:  #f5f6f8;
+  --ds-border:    rgba(0,0,0,0.08);
+  --ds-border-md: rgba(0,0,0,0.12);
+  --ds-border-sub: rgba(0,0,0,0.05);
+  --ds-text:      #111111;
+  --ds-text-2:    #555555;
+  --ds-text-3:    #888888;
+  --ds-text-4:    #aaaaaa;
+  --ds-text-5:    #999999;
+  --ds-muted:     #333333;
+  --ds-hover:     rgba(0,0,0,0.03);
+  --ds-grid:      #e4e6e9;
+  --ds-bar-bg:    #e8eaed;
+  --ds-tooltip-bg: #ffffff;
+  --ds-empty-bg:  #f5f6f8;
 }
 
 /* ── BASE (reset) ────────────────────────────── */

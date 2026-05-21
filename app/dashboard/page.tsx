@@ -77,9 +77,9 @@ function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRo
     <div className="overflow-x-auto">
       <table className="w-full text-xs sm:text-sm min-w-[520px]">
         <thead>
-          <tr className="border-b border-white/7">
-            <th className="text-left py-2.5 pr-4 font-semibold text-[#555] w-32">Serviço</th>
-            <th className="text-right py-2.5 px-3 font-semibold text-[#555]">Atual</th>
+          <tr className="border-b" style={{ borderColor: "var(--ds-border)" }}>
+            <th className="text-left py-2.5 pr-4 font-semibold w-32" style={{ color: "var(--ds-text-5)" }}>Serviço</th>
+            <th className="text-right py-2.5 px-3 font-semibold" style={{ color: "var(--ds-text-5)" }}>Atual</th>
             {providers.map((p) => (
               <th
                 key={p}
@@ -88,7 +88,7 @@ function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRo
               >
                 {providerLabels[p]}
                 {providerLabels[p].toLowerCase() === currentProvider.toLowerCase() && (
-                  <span className="ml-1 text-[9px] text-[#555] font-normal">(atual)</span>
+                  <span className="ml-1 text-[9px] font-normal" style={{ color: "var(--ds-text-5)" }}>(atual)</span>
                 )}
               </th>
             ))}
@@ -99,9 +99,9 @@ function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRo
             const vals = providers.map((p) => row[p]);
             const minVal = Math.min(...vals);
             return (
-              <tr key={i} className="border-b border-white/5 hover:bg-white/2 transition-colors">
-                <td className="py-3 pr-4 font-medium text-[#ccc] truncate max-w-[120px]">{row.name}</td>
-                <td className="py-3 px-3 text-right text-white font-bold">{moeda(row.currentCost)}</td>
+              <tr key={i} className="border-b transition-colors" style={{ borderColor: "var(--ds-border-sub)" }}>
+                <td className="py-3 pr-4 font-medium truncate max-w-[120px]" style={{ color: "var(--ds-muted)" }}>{row.name}</td>
+                <td className="py-3 px-3 text-right font-bold" style={{ color: "var(--ds-text)" }}>{moeda(row.currentCost)}</td>
                 {providers.map((p) => {
                   const val = row[p];
                   const isBest = val === minVal;
@@ -109,11 +109,11 @@ function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRo
                   const diffPct = row.currentCost > 0 ? ((diff / row.currentCost) * 100).toFixed(0) : "0";
                   return (
                     <td key={p} className="py-3 px-3 text-right">
-                      <span className={`font-semibold ${isBest ? "text-[#b3fe71]" : "text-[#999]"}`}>
+                      <span className={`font-semibold ${isBest ? "text-[var(--ds-accent)]" : ""}`} style={!isBest ? { color: "var(--ds-text-3)" } : undefined}>
                         {moeda(val)}
                       </span>
                       <br />
-                      <span className={`text-[10px] ${diff < 0 ? "text-[#b3fe71]" : diff > 0 ? "text-red-400" : "text-[#555]"}`}>
+                      <span className={`text-[10px] ${diff < 0 ? "text-[var(--ds-accent)]" : diff > 0 ? "text-red-400" : ""}`} style={diff === 0 ? { color: "var(--ds-text-5)" } : undefined}>
                         {diff < 0 ? `${diffPct}%` : diff > 0 ? `+${diffPct}%` : "—"}
                       </span>
                     </td>
@@ -131,7 +131,7 @@ function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRo
 /* ── Sub-componente: card de recomendação final ──────── */
 function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost: number }) {
   const complexColor = COMPLEXITY_COLOR[rec.migrationComplexity] ?? "#f59e0b";
-  const provColor = PROVIDER_COLORS[rec.provider] ?? "#b3fe71";
+  const provColor = PROVIDER_COLORS[rec.provider] ?? "var(--ds-accent)";
 
   return (
     <div
@@ -150,18 +150,18 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
           <div>
             {/* Badge de autoridade CFA + Quave */}
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
-                <Shield size={9} className="text-[#b3fe71]" />
-                <span className="text-[9px] font-bold text-[#b3fe71] uppercase tracking-wider">CFA Analysis</span>
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full border" style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border-md)" }}>
+                <Shield size={9} className="text-[var(--ds-accent)]" />
+                <span className="text-[9px] font-bold text-[var(--ds-accent)] uppercase tracking-wider">CFA Analysis</span>
               </div>
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
-                <span className="text-[9px] text-[#555]">Quave × Oracle OPN</span>
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full border" style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border-md)" }}>
+                <span className="text-[9px]" style={{ color: "var(--ds-text-5)" }}>Quave × Oracle OPN</span>
               </div>
             </div>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: provColor }}>
               Recomendação da Orla
             </p>
-            <h3 className="text-xl sm:text-2xl font-black text-white">{rec.provider}</h3>
+            <h3 className="text-xl sm:text-2xl font-black" style={{ color: "var(--ds-text)" }}>{rec.provider}</h3>
           </div>
         </div>
 
@@ -171,15 +171,15 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
             <div className="text-lg sm:text-xl font-black" style={{ color: provColor }}>
               -{rec.savingPct}%
             </div>
-            <div className="text-[10px] text-[#555]">economia</div>
+            <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>economia</div>
           </div>
           <div className="text-center">
-            <div className="text-lg sm:text-xl font-black text-white">{moeda(rec.estimatedCost)}</div>
-            <div className="text-[10px] text-[#555]">custo est.</div>
+            <div className="text-lg sm:text-xl font-black" style={{ color: "var(--ds-text)" }}>{moeda(rec.estimatedCost)}</div>
+            <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>custo est.</div>
           </div>
           <div className="text-center">
-            <div className="text-lg sm:text-xl font-black text-[#b3fe71]">{moeda(totalCost - rec.estimatedCost)}</div>
-            <div className="text-[10px] text-[#555]">poupado/mês</div>
+            <div className="text-lg sm:text-xl font-black text-[var(--ds-accent)]">{moeda(totalCost - rec.estimatedCost)}</div>
+            <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>poupado/mês</div>
           </div>
         </div>
       </div>
@@ -187,16 +187,16 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
       {/* Complexidade */}
       <div className="flex items-center gap-2 mb-4">
         <Zap size={13} style={{ color: complexColor }} />
-        <span className="text-xs text-[#777]">Complexidade de migração:</span>
+        <span className="text-xs" style={{ color: "var(--ds-text-3)" }}>Complexidade de migração:</span>
         <span className="text-xs font-bold" style={{ color: complexColor }}>{rec.migrationComplexity}</span>
       </div>
 
       {/* Motivos */}
       <div className="mb-4">
-        <p className="text-[10px] font-bold text-[#555] uppercase tracking-widest mb-2.5">Por que migrar?</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-2.5" style={{ color: "var(--ds-text-5)" }}>Por que migrar?</p>
         <ul className="space-y-2">
           {rec.reasons.map((r, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-[#bbb] leading-relaxed">
+            <li key={i} className="flex items-start gap-2 text-sm leading-relaxed" style={{ color: "var(--ds-muted)" }}>
               <CheckCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: provColor }} />
               {r}
             </li>
@@ -206,8 +206,8 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
 
       {/* Serviços que mais economizam */}
       {rec.topServices?.length > 0 && (
-        <div className="pt-4 border-t border-white/7">
-          <p className="text-[10px] font-bold text-[#555] uppercase tracking-widest mb-2.5">
+        <div className="pt-4 border-t" style={{ borderColor: "var(--ds-border)" }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-2.5" style={{ color: "var(--ds-text-5)" }}>
             Serviços com maior potencial de economia
           </p>
           <div className="flex flex-wrap gap-2">
@@ -227,14 +227,14 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
 
       {/* Justificativa CFA */}
       {rec.caf_justification && (
-        <div className="mt-4 pt-4 border-t border-white/7">
-          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-white/3 border border-white/7">
-            <Shield size={13} className="text-[#b3fe71] flex-shrink-0 mt-0.5" />
+        <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--ds-border)" }}>
+          <div className="flex items-start gap-2.5 p-3 rounded-xl border" style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border)" }}>
+            <Shield size={13} className="text-[var(--ds-accent)] flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-[10px] font-bold text-[#b3fe71] uppercase tracking-widest mb-1">
+              <p className="text-[10px] font-bold text-[var(--ds-accent)] uppercase tracking-widest mb-1">
                 Análise CFA — TransformCloud Intelligence
               </p>
-              <p className="text-xs text-[#aaa] leading-relaxed italic">
+              <p className="text-xs leading-relaxed italic" style={{ color: "var(--ds-text-2)" }}>
                 &ldquo;{rec.caf_justification}&rdquo;
               </p>
             </div>
@@ -252,20 +252,20 @@ function FreeTierSection({ items }: { items: FreeTierOpportunity[] }) {
   const totalSaving = eligible.reduce((s, i) => s + i.monthlySaving, 0);
 
   return (
-    <div className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-6">
+    <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div className="flex items-center gap-2">
-          <Gift size={15} className="text-[#b3fe71]" />
-          <h3 className="font-bold text-sm text-white">Free Tiers Disponíveis</h3>
-          <span className="text-[10px] text-[#555] bg-white/5 px-2 py-0.5 rounded-full">
+          <Gift size={15} className="text-[var(--ds-accent)]" />
+          <h3 className="font-bold text-sm" style={{ color: "var(--ds-text)" }}>Free Tiers Disponíveis</h3>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: "var(--ds-text-5)", background: "var(--ds-hover)" }}>
             Dinheiro deixado na mesa
           </span>
         </div>
         {totalSaving > 0 && (
           <div className="text-right">
-            <div className="text-lg font-black text-[#b3fe71]">{moeda(totalSaving)}/mês</div>
-            <div className="text-[10px] text-[#555]">economia potencial elegível</div>
+            <div className="text-lg font-black text-[var(--ds-accent)]">{moeda(totalSaving)}/mês</div>
+            <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>economia potencial elegível</div>
           </div>
         )}
       </div>
@@ -279,18 +279,18 @@ function FreeTierSection({ items }: { items: FreeTierOpportunity[] }) {
               className="flex items-start gap-3 p-3 rounded-xl bg-[#b3fe71]/5 border border-[#b3fe71]/15"
             >
               <div className="w-7 h-7 rounded-lg bg-[#b3fe71]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle size={13} className="text-[#b3fe71]" />
+                <CheckCircle size={13} className="text-[var(--ds-accent)]" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  <span className="text-xs font-bold text-white">{item.provider}</span>
-                  <span className="text-[10px] text-[#555]">·</span>
-                  <span className="text-xs text-[#a3a3a3]">{item.service}</span>
-                  <span className="ml-auto text-xs font-black text-[#b3fe71]">
+                  <span className="text-xs font-bold" style={{ color: "var(--ds-text)" }}>{item.provider}</span>
+                  <span className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>·</span>
+                  <span className="text-xs" style={{ color: "var(--ds-text-2)" }}>{item.service}</span>
+                  <span className="ml-auto text-xs font-black text-[var(--ds-accent)]">
                     {moeda(item.monthlySaving)}/mês
                   </span>
                 </div>
-                <p className="text-[11px] text-[#666] leading-snug">{item.description}</p>
+                <p className="text-[11px] leading-snug" style={{ color: "var(--ds-text-3)" }}>{item.description}</p>
               </div>
             </div>
           ))}
@@ -300,24 +300,25 @@ function FreeTierSection({ items }: { items: FreeTierOpportunity[] }) {
       {/* Não elegíveis (colapsado visualmente) */}
       {others.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[10px] text-[#444] uppercase tracking-widest mb-2">
+          <p className="text-[10px] uppercase tracking-widest mb-2" style={{ color: "var(--ds-text-4)" }}>
             Outros free tiers — fora do perfil atual
           </p>
           {others.map((item, i) => (
             <div
               key={i}
-              className="flex items-start gap-3 p-3 rounded-xl bg-white/2 border border-white/5 opacity-60"
+              className="flex items-start gap-3 p-3 rounded-xl border opacity-60"
+              style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border-sub)" }}
             >
-              <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Gift size={12} className="text-[#555]" />
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: "var(--ds-hover)" }}>
+                <Gift size={12} style={{ color: "var(--ds-text-5)" }} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  <span className="text-xs font-semibold text-[#666]">{item.provider}</span>
-                  <span className="text-[10px] text-[#444]">·</span>
-                  <span className="text-xs text-[#555]">{item.service}</span>
+                  <span className="text-xs font-semibold" style={{ color: "var(--ds-text-3)" }}>{item.provider}</span>
+                  <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>·</span>
+                  <span className="text-xs" style={{ color: "var(--ds-text-5)" }}>{item.service}</span>
                 </div>
-                <p className="text-[11px] text-[#555] leading-snug">{item.description}</p>
+                <p className="text-[11px] leading-snug" style={{ color: "var(--ds-text-5)" }}>{item.description}</p>
               </div>
             </div>
           ))}
@@ -350,7 +351,7 @@ function OrlaLoading() {
   const pct = Math.round(((step + 1) / ORLA_STEPS.length) * 100);
 
   return (
-    <div className="relative mb-5 overflow-hidden rounded-2xl border border-[#b3fe71]/20 bg-[#0a0a0a]">
+    <div className="relative mb-5 overflow-hidden rounded-2xl border border-[#b3fe71]/20" style={{ background: "var(--ds-empty-bg)" }}>
       {/* Glow radial */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[260px] rounded-full bg-[#b3fe71]/6 blur-[80px] pointer-events-none" />
 
@@ -374,8 +375,8 @@ function OrlaLoading() {
 
         {/* Lado direito — textos e progresso */}
         <div className="flex-1 min-w-0 text-center sm:text-left">
-          <p className="text-lg font-black text-white mb-0.5">Orla está analisando</p>
-          <p className="text-xs text-[#555] mb-5">
+          <p className="text-lg font-black mb-0.5" style={{ color: "var(--ds-text)" }}>Orla está analisando</p>
+          <p className="text-xs mb-5" style={{ color: "var(--ds-text-5)" }}>
             Análise com padrão CFA · Quave × Oracle Cloud
           </p>
 
@@ -383,7 +384,7 @@ function OrlaLoading() {
           <div className="h-5 mb-4 overflow-hidden">
             <p
               key={step}
-              className="text-sm text-[#b3fe71] font-medium"
+              className="text-sm text-[var(--ds-accent)] font-medium"
               style={{ animation: "fadeUp 0.4s ease forwards" }}
             >
               {ORLA_STEPS[step]}
@@ -393,10 +394,10 @@ function OrlaLoading() {
           {/* Barra de progresso determinada */}
           <div className="w-full max-w-xs mx-auto sm:mx-0 mb-3">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] text-[#444]">Progresso</span>
-              <span className="text-[10px] font-bold text-[#b3fe71]">{pct}%</span>
+              <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>Progresso</span>
+              <span className="text-[10px] font-bold text-[var(--ds-accent)]">{pct}%</span>
             </div>
-            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+            <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "var(--ds-hover)" }}>
               <div
                 className="h-full rounded-full bg-[#b3fe71] transition-all duration-700"
                 style={{ width: `${pct}%` }}
@@ -414,7 +415,7 @@ function OrlaLoading() {
                   width: i === step ? "14px" : "5px",
                   height: "5px",
                   background: i === step
-                    ? "#b3fe71"
+                    ? "var(--ds-accent)"
                     : i < step
                     ? "rgba(132,204,22,0.45)"
                     : "rgba(255,255,255,0.07)",
@@ -505,28 +506,28 @@ export default function DashboardPage() {
       <div className="mb-6 sm:mb-8 flex items-center gap-4">
         <OrlaMascot size={56} mood="idle" />
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-white mb-0.5">
+          <h1 className="text-xl sm:text-2xl font-black mb-0.5" style={{ color: "var(--ds-text)" }}>
             Orla — Cloud Intelligence
           </h1>
-          <p className="text-[#555] text-xs sm:text-sm">
+          <p className="text-xs sm:text-sm" style={{ color: "var(--ds-text-5)" }}>
             Análise com padrão CFA · Quave × Oracle Cloud · Zero lock-in
           </p>
         </div>
       </div>
 
       {/* ── UPLOAD ─────────────────────────────────── */}
-      <div className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-6 mb-5">
+      <div className="border rounded-2xl p-4 sm:p-6 mb-5" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
         <div className="flex items-center gap-2 mb-4">
-          <Upload size={15} className="text-[#b3fe71]" />
-          <h2 className="font-bold text-sm text-white">Arquivo de Billing</h2>
-          <span className="text-[10px] text-[#555] bg-white/5 px-2 py-0.5 rounded-full">
+          <Upload size={15} className="text-[var(--ds-accent)]" />
+          <h2 className="font-bold text-sm" style={{ color: "var(--ds-text)" }}>Arquivo de Billing</h2>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: "var(--ds-text-5)", background: "var(--ds-hover)" }}>
             CSV · JSON · TXT · max 400 KB
           </span>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
           {["AWS Cost & Usage Report", "GCP Billing Export", "Azure Cost Analysis", "OCI Cost Report"].map((f) => (
-            <span key={f} className="text-[11px] text-[#555] px-2 py-0.5 bg-white/5 rounded-md">{f}</span>
+            <span key={f} className="text-[11px] px-2 py-0.5 rounded-md" style={{ color: "var(--ds-text-5)", background: "var(--ds-hover)" }}>{f}</span>
           ))}
         </div>
 
@@ -537,27 +538,28 @@ export default function DashboardPage() {
             onDrop={onDrop}
             onClick={() => inputRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-              dragOver ? "border-[#b3fe71] bg-[#b3fe71]/5" : "border-white/10 hover:border-white/20"
+              dragOver ? "border-[#b3fe71] bg-[#b3fe71]/5" : ""
             }`}
+            style={!dragOver ? { borderColor: "var(--ds-border-md)" } : undefined}
           >
-            <Upload size={26} className="mx-auto mb-3 text-[#444]" />
-            <p className="text-sm text-[#666] mb-1">
-              <span className="text-[#b3fe71] font-semibold">Clique para selecionar</span> ou arraste aqui
+            <Upload size={26} className="mx-auto mb-3" style={{ color: "var(--ds-text-4)" }} />
+            <p className="text-sm mb-1" style={{ color: "var(--ds-text-3)" }}>
+              <span className="text-[var(--ds-accent)] font-semibold">Clique para selecionar</span> ou arraste aqui
             </p>
-            <p className="text-xs text-[#444]">CSV, JSON ou TXT — máx. 400 KB</p>
+            <p className="text-xs" style={{ color: "var(--ds-text-4)" }}>CSV, JSON ou TXT — máx. 400 KB</p>
             <input ref={inputRef} type="file" accept=".csv,.json,.txt,.tsv" className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }} />
           </div>
         ) : (
           <div className="flex items-center gap-3 p-4 bg-[#b3fe71]/5 border border-[#b3fe71]/20 rounded-xl">
             <div className="w-9 h-9 rounded-lg bg-[#b3fe71]/15 flex items-center justify-center flex-shrink-0">
-              <FileText size={16} className="text-[#b3fe71]" />
+              <FileText size={16} className="text-[var(--ds-accent)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{file.name}</p>
-              <p className="text-xs text-[#555]">{(file.size / 1024).toFixed(1)} KB</p>
+              <p className="text-sm font-semibold truncate" style={{ color: "var(--ds-text)" }}>{file.name}</p>
+              <p className="text-xs" style={{ color: "var(--ds-text-5)" }}>{(file.size / 1024).toFixed(1)} KB</p>
             </div>
-            <button onClick={clearFile} className="p-1.5 text-[#555] hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+            <button onClick={clearFile} className="p-1.5 rounded-lg transition-colors" style={{ color: "var(--ds-text-5)" }}>
               <X size={14} />
             </button>
           </div>
@@ -593,8 +595,8 @@ export default function DashboardPage() {
               <div className="flex items-start gap-3">
                 <OrlaMascot size={44} mood="happy" className="flex-shrink-0 -mt-1" />
                 <div>
-                  <p className="text-[10px] text-[#b3fe71] font-bold uppercase tracking-widest mb-1">Resumo — Orla</p>
-                  <p className="text-sm text-[#ccc] leading-relaxed">{data.summary}</p>
+                  <p className="text-[10px] text-[var(--ds-accent)] font-bold uppercase tracking-widest mb-1">Resumo — Orla</p>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--ds-muted)" }}>{data.summary}</p>
                 </div>
               </div>
             </div>
@@ -616,45 +618,45 @@ export default function DashboardPage() {
                 value: bestAlt ? moeda(data.totalCost - bestAlt.estimatedCost) : "—",
                 sub: "por mês" },
             ].map((card) => (
-              <div key={card.label} className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-5">
+              <div key={card.label} className="border rounded-2xl p-4 sm:p-5" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <card.icon size={12} className="text-[#b3fe71] flex-shrink-0" />
-                  <span className="text-[10px] text-[#555] truncate">{card.label}</span>
+                  <card.icon size={12} className="text-[var(--ds-accent)] flex-shrink-0" />
+                  <span className="text-[10px] truncate" style={{ color: "var(--ds-text-5)" }}>{card.label}</span>
                 </div>
-                <div className={`text-lg sm:text-2xl font-black truncate ${card.highlight ? "text-[#b3fe71]" : "text-white"}`}>
+                <div className={`text-lg sm:text-2xl font-black truncate ${card.highlight ? "text-[var(--ds-accent)]" : ""}`} style={!card.highlight ? { color: "var(--ds-text)" } : undefined}>
                   {card.value}
                 </div>
-                <div className="text-[10px] text-[#444] mt-1 truncate">{card.sub}</div>
+                <div className="text-[10px] mt-1 truncate" style={{ color: "var(--ds-text-4)" }}>{card.sub}</div>
               </div>
             ))}
           </div>
 
           {/* Evolução diária */}
           {data.dailyTotals?.length > 0 && (
-            <div className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-6">
-              <h3 className="font-bold text-sm mb-0.5 text-white">Evolução de Custos</h3>
-              <p className="text-xs text-[#555] mb-4">Período analisado (USD)</p>
+            <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
+              <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Evolução de Custos</h3>
+              <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>Período analisado (USD)</p>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={data.dailyTotals} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gradTC" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#b3fe71" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#b3fe71" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--ds-accent)" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="var(--ds-accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e" />
-                  <XAxis dataKey="date" tickFormatter={fmtData} tick={{ fill: "#555", fontSize: 10 }}
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--ds-grid)" />
+                  <XAxis dataKey="date" tickFormatter={fmtData} tick={{ fill: "var(--ds-text-5)", fontSize: 10 }}
                     axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false}
+                  <YAxis tick={{ fill: "var(--ds-text-5)", fontSize: 10 }} axisLine={false} tickLine={false}
                     tickFormatter={(v) => `$${v}`} width={45} />
                   <Tooltip
-                    contentStyle={{ background: "#161616", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "10px", color: "#fff", fontSize: 12 }}
+                    contentStyle={{ background: "var(--ds-tooltip-bg)", border: "1px solid var(--ds-border)", borderRadius: "10px", color: "var(--ds-text)", fontSize: 12 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={(v: any) => [moeda(Number(v)), "Custo"]}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     labelFormatter={(d: any) => fmtData(String(d))}
                   />
-                  <Area type="monotone" dataKey="total" stroke="#b3fe71" strokeWidth={2} fill="url(#gradTC)" dot={false} />
+                  <Area type="monotone" dataKey="total" stroke="var(--ds-accent)" strokeWidth={2} fill="url(#gradTC)" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -662,19 +664,19 @@ export default function DashboardPage() {
 
           {/* Comparação cross-cloud (gráfico) */}
           {crossData.length > 0 && (
-            <div className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-6">
-              <h3 className="font-bold text-sm mb-0.5 text-white">Comparação Cross-Cloud</h3>
-              <p className="text-xs text-[#555] mb-4">
+            <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
+              <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Comparação Cross-Cloud</h3>
+              <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>
                 Custo estimado da mesma infraestrutura em outros provedores
               </p>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={crossData} barSize={38} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e" />
-                  <XAxis dataKey="provider" tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false}
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--ds-grid)" />
+                  <XAxis dataKey="provider" tick={{ fill: "var(--ds-text-5)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "var(--ds-text-5)", fontSize: 10 }} axisLine={false} tickLine={false}
                     tickFormatter={(v) => `$${v}`} width={45} />
                   <Tooltip
-                    contentStyle={{ background: "#161616", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "10px", color: "#fff", fontSize: 12 }}
+                    contentStyle={{ background: "var(--ds-tooltip-bg)", border: "1px solid var(--ds-border)", borderRadius: "10px", color: "var(--ds-text)", fontSize: 12 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={(v: any) => [moeda(Number(v)), "Custo Est."]}
                   />
@@ -685,10 +687,10 @@ export default function DashboardPage() {
                 {crossData.map((p) => (
                   <div key={p.provider} className="flex items-center gap-1.5 text-xs">
                     <span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.fill }} />
-                    <span className="text-[#666]">{p.provider}</span>
-                    {p.isCurrentProvider && <span className="text-[#444] text-[10px]">(atual)</span>}
+                    <span style={{ color: "var(--ds-text-3)" }}>{p.provider}</span>
+                    {p.isCurrentProvider && <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>(atual)</span>}
                     {!p.isCurrentProvider && p.savingPct > 0 && (
-                      <span className="font-bold text-[#b3fe71]">-{p.savingPct}%</span>
+                      <span className="font-bold text-[var(--ds-accent)]">-{p.savingPct}%</span>
                     )}
                     {!p.isCurrentProvider && p.savingPct < 0 && (
                       <span className="font-bold text-red-400">+{Math.abs(p.savingPct)}%</span>
@@ -701,9 +703,9 @@ export default function DashboardPage() {
 
           {/* ── COMPARATIVO DE SERVIÇOS (NOVO) ──────── */}
           {data.serviceComparison?.length > 0 && (
-            <div className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-6">
-              <h3 className="font-bold text-sm mb-0.5 text-white">Comparativo de Serviços por Provedor</h3>
-              <p className="text-xs text-[#555] mb-4">
+            <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
+              <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Comparativo de Serviços por Provedor</h3>
+              <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>
                 Custo estimado de cada serviço nos 4 provedores — verde = melhor opção
               </p>
               <ServiceComparisonTable
@@ -715,9 +717,9 @@ export default function DashboardPage() {
 
           {/* Breakdown por serviço */}
           {servicos.length > 0 && (
-            <div className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-6">
-              <h3 className="font-bold text-sm mb-0.5 text-white">Breakdown por Serviço</h3>
-              <p className="text-xs text-[#555] mb-4">Distribuição de custos no período</p>
+            <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
+              <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Breakdown por Serviço</h3>
+              <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>Distribuição de custos no período</p>
               <div className="space-y-3">
                 {servicos.map((s, i) => {
                   const cor = SERVICE_COLORS[i % SERVICE_COLORS.length];
@@ -726,14 +728,14 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between mb-1.5 gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: cor }} />
-                          <span className="text-xs sm:text-sm text-[#ccc] truncate">{s.name}</span>
+                          <span className="text-xs sm:text-sm truncate" style={{ color: "var(--ds-muted)" }}>{s.name}</span>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-[10px] text-[#444]">{s.percentage.toFixed(1)}%</span>
-                          <span className="text-xs sm:text-sm font-bold text-white">{moeda(s.cost)}</span>
+                          <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>{s.percentage.toFixed(1)}%</span>
+                          <span className="text-xs sm:text-sm font-bold" style={{ color: "var(--ds-text)" }}>{moeda(s.cost)}</span>
                         </div>
                       </div>
-                      <div className="w-full bg-[#0f0f0f] rounded-full h-1.5">
+                      <div className="w-full rounded-full h-1.5" style={{ background: "var(--ds-bar-bg)" }}>
                         <div className="h-1.5 rounded-full transition-all duration-700"
                           style={{ width: `${s.percentage}%`, background: cor }} />
                       </div>
@@ -743,7 +745,7 @@ export default function DashboardPage() {
               </div>
               {data.services.length > 6 && (
                 <button onClick={() => setShowAll(!showAll)}
-                  className="mt-4 flex items-center gap-1.5 text-xs text-[#b3fe71] hover:underline">
+                  className="mt-4 flex items-center gap-1.5 text-xs text-[var(--ds-accent)] hover:underline">
                   {showAll
                     ? <><ChevronUp size={12} /> Ver menos</>
                     : <><ChevronDown size={12} /> Ver todos os {data.services.length} serviços</>}
@@ -764,15 +766,15 @@ export default function DashboardPage() {
 
           {/* Insights */}
           {data.insights?.length > 0 && (
-            <div className="bg-[#161616] border border-white/7 rounded-2xl p-4 sm:p-6">
+            <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles size={14} className="text-[#b3fe71]" />
-                <h3 className="font-bold text-sm text-white">Insights da Orla</h3>
+                <Sparkles size={14} className="text-[var(--ds-accent)]" />
+                <h3 className="font-bold text-sm" style={{ color: "var(--ds-text)" }}>Insights da Orla</h3>
               </div>
               <ul className="space-y-3">
                 {data.insights.map((insight, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-[#aaa] leading-relaxed">
-                    <span className="w-5 h-5 rounded-full bg-[#b3fe71]/10 text-[#b3fe71] text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <li key={i} className="flex items-start gap-2.5 text-sm leading-relaxed" style={{ color: "var(--ds-text-2)" }}>
+                    <span className="w-5 h-5 rounded-full bg-[#b3fe71]/10 text-[var(--ds-accent)] text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
                       {i + 1}
                     </span>
                     {insight}
@@ -786,18 +788,18 @@ export default function DashboardPage() {
 
       {/* Estado vazio */}
       {!data && !loading && (
-        <div className="bg-[#161616] border border-dashed border-white/7 rounded-2xl p-10 sm:p-14 text-center">
+        <div className="border border-dashed rounded-2xl p-10 sm:p-14 text-center" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
           <div className="flex justify-center mb-3">
             <OrlaMascot size={90} mood="idle" />
           </div>
-          <h3 className="font-bold mb-2 text-sm sm:text-base text-white">
+          <h3 className="font-bold mb-2 text-sm sm:text-base" style={{ color: "var(--ds-text)" }}>
             Olá, sou a Orla.
           </h3>
-          <p className="text-xs sm:text-sm text-[#555] max-w-sm mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm max-w-sm mx-auto leading-relaxed" style={{ color: "var(--ds-text-5)" }}>
             Envie seu arquivo de billing e eu analiso seus custos, comparo os 4 grandes provedores,
             mapeio free tiers e gero uma recomendação com padrão CFA — em minutos.
           </p>
-          <p className="mt-3 text-[10px] text-[#444]">
+          <p className="mt-3 text-[10px]" style={{ color: "var(--ds-text-4)" }}>
             AWS Cost Explorer · GCP Billing · Azure Cost Analysis · OCI Cost Report
           </p>
         </div>

@@ -1,21 +1,19 @@
 # TransformCloud — Contexto Completo do Projeto
 
-> Gerado em: 2026-05-19  
-> Objetivo: Documento de referência para agentes de IA e desenvolvedores que precisam entender o projeto antes de fazer qualquer mudança.
+> Atualizado em: 2026-05-21
+> Objetivo: Referência para agentes de IA e desenvolvedores antes de qualquer mudança no projeto.
 
 ---
 
 ## O que é o TransformCloud?
 
-TransformCloud é uma plataforma SaaS de inteligência de nuvem com IA, desenhada para ajudar empresas a otimizar gastos e planejar migrações multi-cloud com embasamento financeiro.
+Plataforma SaaS de inteligência de nuvem com IA para otimização de gastos e migração multi-cloud.
 
 **Tagline:** "Custos, portabilidade, eficiência e migração inteligente. Devolva o controle da sua nuvem para a sua empresa."
 
-**Problema que resolve:** 72% das empresas estouram o orçamento de nuvem. O TransformCloud analisa o billing, compara os 4 grandes provedores e entrega um plano de migração com ROI calculado — em minutos.
+**Idioma:** Português (Brasil). Toda UI e respostas de API em PT-BR.
 
-**Idioma principal:** Português (Brasil). Toda a UI, cópias e respostas de API estão em PT-BR.
-
-**Status:** Early-stage production. Core funcional, páginas de dashboard parcialmente scaffolded para expansão futura.
+**Status:** Early-stage. Core de billing funcional, auth completo, dashboard com tema claro/escuro.
 
 ---
 
@@ -23,17 +21,17 @@ TransformCloud é uma plataforma SaaS de inteligência de nuvem com IA, desenhad
 
 | Camada | Tecnologia | Versão |
 |--------|-----------|--------|
-| Framework | Next.js (App Router) | 16.2.6 |
-| UI | React | 19.2.4 |
+| Framework | Next.js (App Router) | 16.x |
+| UI | React | 19.x |
 | Linguagem | TypeScript | 5 |
 | Estilização | Tailwind CSS | 4 |
-| Ícones | Lucide React | 1.16.0 |
-| Gráficos | Recharts | 3.8.1 |
+| Ícones | Lucide React | - |
+| Gráficos | Recharts | 3.x |
 | IA | Anthropic Claude SDK | 0.96.0 |
 | AWS | @aws-sdk/client-cost-explorer | 3.x |
-| AWS Auth | @aws-sdk/client-sts | 3.x |
+| HTTP Client | Fetch nativo (`lib/api.ts`) | - |
 
-**Importante:** Next.js 16 tem breaking changes em relação às versões anteriores. Leia `node_modules/next/dist/docs/` antes de alterar qualquer código relacionado ao framework.
+**Backend separado:** NestJS na porta 3001 — ver `backend/AI/PROJECT_CONTEXT.md`.
 
 ---
 
@@ -42,37 +40,42 @@ TransformCloud é uma plataforma SaaS de inteligência de nuvem com IA, desenhad
 ```
 transformCloud/
 ├── app/
-│   ├── layout.tsx                  # Root layout (fonte Poppins, metadata global)
-│   ├── globals.css                 # Variáveis CSS, keyframes, classes base
-│   ├── page.tsx                    # Landing page (marketing)
+│   ├── layout.tsx                  # Root layout — AuthProvider, fonte Poppins
+│   ├── globals.css                 # Design tokens CSS, keyframes, classes base, tema dashboard
+│   ├── page.tsx                    # Landing page
+│   ├── login/page.tsx              # Tela de login (split 50/50 + ilustração animada)
+│   ├── register/page.tsx           # Tela de cadastro (split 50/50 + ilustração animada)
+│   ├── forgot-password/page.tsx    # Recuperação de senha (step 1: solicitar)
+│   ├── reset-password/page.tsx     # Recuperação de senha (step 2: nova senha com ?token=)
 │   ├── api/
-│   │   ├── analyze/route.ts        # POST - Análise IA de billing (endpoint principal)
-│   │   └── billing/route.ts        # POST - Integração direta AWS Cost Explorer
+│   │   ├── analyze/route.ts        # POST - Análise IA billing (Claude + web search)
+│   │   └── billing/route.ts        # POST - AWS Cost Explorer direto
 │   ├── components/
-│   │   ├── Navbar.tsx
+│   │   ├── Navbar.tsx              # Navbar responsiva com estado de auth
 │   │   ├── OrlaMascot.tsx          # Mascote SVG animado (polvo)
-│   │   └── landing/
-│   │       ├── HeroSection.tsx
-│   │       ├── StatsSection.tsx
-│   │       ├── ComparisonSection.tsx
-│   │       ├── PlatformSection.tsx
-│   │       ├── ModulesSection.tsx
-│   │       ├── HowItWorksSection.tsx
-│   │       ├── CTASection.tsx
-│   │       └── Footer.tsx
+│   │   ├── AuthIllustration.tsx    # Ilustração abstrata animada (login/register/forgot/reset)
+│   │   └── landing/               # Seções da landing page
 │   └── dashboard/
-│       ├── layout.tsx              # Sidebar de navegação do dashboard
-│       ├── page.tsx                # Billing Analysis (funcionalidade principal)
+│       ├── layout.tsx              # Sidebar + guard de auth + ThemeProvider + toggle Sol/Lua
+│       ├── page.tsx                # Billing Analysis (funcional)
+│       ├── profile/page.tsx        # Perfil do usuário (nome editável, troca de senha)
 │       ├── ai/page.tsx             # AI Insights (scaffolded)
 │       ├── portability/page.tsx    # Portability Score (scaffolded)
 │       ├── migrations/page.tsx     # Migration Automation (scaffolded)
 │       └── settings/page.tsx       # Settings (scaffolded)
-├── AI/                             # ← Esta pasta: contexto e registro de mudanças
+├── lib/
+│   ├── api.ts                      # Cliente HTTP para o backend NestJS
+│   ├── auth-context.tsx            # AuthProvider + useAuth()
+│   └── theme-context.tsx           # ThemeProvider + useTheme() (dark/light dashboard)
+├── AI/                             # Documentação para agentes de IA
 │   ├── PROJECT_CONTEXT.md          # Este arquivo
-│   └── CHANGES.md                  # Log de mudanças por sessão de IA
-├── AGENTS.md                       # Instrução para agentes sobre Next.js 16
-├── CLAUDE.md                       # Referencia AGENTS.md
-└── README.md                       # Notas básicas do create-next-app
+│   ├── CHANGES.md                  # Log de mudanças por sessão
+│   ├── ARCHITECTURE_BILLING_V2.md  # Pipeline V2 de análise de billing
+│   └── MODULES/
+│       ├── AUTH_FRONTEND.md        # Auth, perfil, recuperação de senha
+│       └── DASHBOARD_THEME.md      # Sistema de tema claro/escuro
+└── backend/                        # API NestJS (porta 3001)
+    └── AI/                         # Documentação do backend
 ```
 
 ---
@@ -80,210 +83,108 @@ transformCloud/
 ## Variáveis de Ambiente
 
 ```env
-ANTHROPIC_API_KEY=      # Obrigatório — chave da API do Claude
-                        # Usada em: /api/analyze
-
-# Opcionais (usuário fornece pela UI, não precisam estar no .env):
-# AWS_ACCESS_KEY_ID
-# AWS_SECRET_ACCESS_KEY
-# AWS_REGION (padrão: us-east-1)
+# .env.local (frontend)
+ANTHROPIC_API_KEY=          # Obrigatório para /api/analyze
+NEXT_PUBLIC_API_URL=http://localhost:3001/api   # Backend NestJS (opcional, tem fallback)
 ```
 
-Não há banco de dados. A plataforma é **stateless** — dados trafegam pela API e não são persistidos.
+---
+
+## Sistema de Autenticação
+
+Fluxo completo implementado. Ver `AI/MODULES/AUTH_FRONTEND.md` para detalhes.
+
+| Rota | Descrição |
+|------|-----------|
+| `/login` | Login com e-mail + senha |
+| `/register` | Cadastro + redirect automático ao dashboard |
+| `/forgot-password` | Solicita reset de senha (resposta neutra) |
+| `/reset-password?token=` | Nova senha via JWT temporário (15min) |
+
+**Tokens:** `accessToken` (15min) + `refreshToken` (7d) em `localStorage`.  
+**Guard:** `dashboard/layout.tsx` redireciona para `/login` se não autenticado.
 
 ---
 
-## Endpoints de API
+## Dashboard
 
-### `POST /api/analyze`
-Endpoint principal. Recebe um arquivo de billing (CSV, JSON, TXT, máx 400KB), processa com Claude Sonnet 4.6 e retorna análise completa.
+### Tema Claro/Escuro
+Sistema completo. Ver `AI/MODULES/DASHBOARD_THEME.md`.
 
-**Fluxo:**
-1. Recebe `fileContent` (string) e `fileName` no body JSON
-2. Envia para Claude com system prompt da "Orla" (persona CFA)
-3. Claude faz até 4 web searches para buscar preços atuais dos provedores
-4. Retorna JSON estruturado com toda a análise
+- Toggle Sol/Lua na sidebar (desktop) e topbar (mobile)
+- Persiste em `localStorage` via `lib/theme-context.tsx`
+- Classe `.ds-light` aplicada no `<html>` para cobrir elementos `fixed`
+- Variáveis `--ds-accent`: `#b3fe71` (dark) / `#3a7d00` (light)
+- **Landing page e telas de auth permanecem sempre dark**
 
-**Timeout:** 120 segundos (por causa do web_search)  
-**Max tokens resposta:** 16.000
+### Billing Analysis (`/dashboard`)
+Funcional e completo. Upload de arquivo → Claude analisa → gráficos + recomendação.
 
-**Shape da resposta:**
-```typescript
-interface BillingData {
-  provider: string                        // "AWS" | "GCP" | "Azure" | "OCI" | "Desconhecido"
-  period: { start: string; end: string }  // YYYY-MM-DD
-  totalCost: number
-  currency: "USD"
-  services: Array<{ name: string; cost: number; percentage: number }>
-  dailyTotals: Array<{ date: string; total: number }>
-  crossCloud: Array<{
-    provider: string
-    estimatedCost: number
-    saving: number
-    savingPct: number
-    isCurrentProvider: boolean
-  }>
-  serviceComparison: Array<{
-    name: string; currentCost: number
-    aws: number; gcp: number; azure: number; oci: number
-  }>
-  freeTierOpportunities?: Array<{
-    provider: string; service: string
-    description: string; monthlySaving: number; eligible: boolean
-  }>
-  recommendation: {
-    provider: string
-    estimatedCost: number
-    saving: number
-    savingPct: number
-    migrationComplexity: "Baixa" | "Média" | "Alta"
-    reasons: string[]
-    topServices: string[]
-    caf_justification?: string
-  }
-  insights: string[]
-  summary: string
-}
-```
+### Perfil (`/dashboard/profile`)
+- Cabeçalho com avatar (iniciais), nome, role, data de entrada, e-mail, ID
+- Card "Informações pessoais": nome editável inline
+- Card "Segurança": troca de senha com confirmação da senha atual
+- Responsivo ao tema claro/escuro
 
-### `POST /api/billing`
-Integração direta com AWS Cost Explorer. O usuário fornece as credenciais AWS pela UI.
-
-**Input:** `{ accessKeyId, secretAccessKey, region, startDate, endDate }`  
-**Output:** Custos diários + por serviço + totais agregados
-
----
-
-## Funcionalidades Implementadas
-
-### Dashboard - Billing Analysis (`/dashboard`)
-**Funcional e completo.**
-
-- Upload de arquivo via drag-and-drop ou clique (CSV/JSON/TXT, máx 400KB)
-- Animação de loading "Orla" com 8 etapas de progresso
-- Cards KPI: custo total, provedor atual, melhor alternativa, economia potencial
-- Gráficos (Recharts): evolução de custo (área), comparação cross-cloud (barras)
-- Breakdown por serviço com gráficos de barra individuais
-- Tabela de comparação cross-cloud (AWS vs GCP vs Azure vs OCI)
-  - Melhor opção destacada em verde (#b3fe71)
-  - % de diferença em relação ao provedor atual
-- Oportunidades de free tier com economia mensal estimada
-- Card de recomendação com: provedor, complexidade de migração, justificativa CFA
-- 3 insights acionáveis gerados por IA
-- Sumário executivo (2-3 frases)
-
-### Landing Page (`/`)
-Página de marketing completa com todas as seções implementadas.
-
-### Páginas Scaffolded (UI estática, sem lógica real ainda)
-- `/dashboard/ai` — AI Insights: recomendações de migração categorizadas
-- `/dashboard/portability` — Portability Score: score 0-100 por serviço
-- `/dashboard/migrations` — Migration Automation: receitas pré-construídas
-- `/dashboard/settings` — Settings: conexão de provedores e alertas
-
----
-
-## Mascote: Orla
-
-Orla é o nome tanto do mascote visual quanto da persona de IA.
-
-**Visual:** Polvo SVG animado (`OrlaMascot.tsx`) com:
-- Tentáculos com fases de animação distintas
-- 4 moods: `"default"`, `"thinking"`, `"happy"`, `"idle"`
-- Olhos piscantes com rastreamento de pupila
-- Blush nas bochechas
-- Animação de flutuação e pontos de pensamento
-
-**Persona IA:** Analista de inteligência de nuvem certificada CFA. Tom direto, consultivo e focado em ROI. Responde em PT-BR. Faz web searches para buscar preços atuais antes de calcular.
+### Páginas Scaffolded
+- `/dashboard/ai` — AI Insights
+- `/dashboard/portability` — Portability Score
+- `/dashboard/migrations` — Migration Automation
+- `/dashboard/settings` — Settings
 
 ---
 
 ## Design System
 
-### Cores
-| Token | Valor | Uso |
-|-------|-------|-----|
-| Lime (accent) | `#b3fe71` | CTAs, highlights, OCI, melhor opção |
-| Background main | `#0f0f0f` | Fundo geral |
-| Background card | `#161616` | Cards e painéis |
-| Background hover | `#1a1a1a` | Estados hover |
-| Text primary | `#ffffff` | Títulos |
-| Text secondary | `#a3a3a3` | Corpo |
-| AWS | `#f97316` | Orange |
-| GCP | `#3b82f6` | Blue |
-| Azure | `#06b6d4` | Cyan |
+### Cores (Landing/Auth — sempre dark)
+| Token CSS | Valor | Uso |
+|-----------|-------|-----|
+| `--lime` / accent | `#b3fe71` | CTAs, highlights |
+| `--bg` | `#0f0f0f` | Fundo geral |
+| `--bg2` | `#161616` | Cards |
 
-### Complexidade de Migração
-| Nível | Cor |
-|-------|-----|
-| Baixa | `#b3fe71` (verde) |
-| Média | `#f59e0b` (âmbar) |
-| Alta | `#ef4444` (vermelho) |
+### Cores Dashboard — tokens semânticos
+| Token | Dark | Light |
+|-------|------|-------|
+| `--ds-accent` | `#b3fe71` | `#3a7d00` |
+| `--ds-bg` | `#1a1a1a` | `#f0f2f5` |
+| `--ds-surface` | `#1a1a1a` | `#e8eaed` |
+| `--ds-card` | `#161616` | `#ffffff` |
+| `--ds-border` | `#2a2a2a` | `rgba(0,0,0,0.08)` |
+| `--ds-text` | `#ffffff` | `#111111` |
+| `--ds-text-2` | `#a3a3a3` | `#555555` |
 
-### Tipografia
-- Fonte: **Poppins** (Google Fonts via `next/font`)
-- Pesos: 400, 500, 600, 700, 900
+**Regra:** `PROVIDER_COLORS` e `SERVICE_COLORS` usam hex literal (não var) — são passados a Recharts SVG e precisam de valores resolvidos.
 
-### Classes CSS Globais (em `globals.css`)
-- `.section-container` — container de seção com padding padrão
-- `.card` — card base com borda e background
-- `.btn-primary` — botão lime
-- `.btn-secondary` — botão outline
-
-### Keyframes Disponíveis
-- `fadeUp`, `fadeIn` — entrada de elementos
-- `pulse-dot` — pontos de loading
-- `glow-pulse` — efeito brilho
-- `float` — flutuação do mascote
+### Ilustração de Auth
+`AuthIllustration.tsx` — sistema orbital com 3 anéis girantes, núcleo pulsante, linha de scan e partículas. Reutilizado em `/login`, `/register`, `/forgot-password`, `/reset-password`.
 
 ---
 
-## Os 5 Módulos do Produto
+## Endpoints de API (Next.js)
 
-| # | Módulo | Status |
-|---|--------|--------|
-| 1 | **Billing Extraction** — conexão direta às APIs de billing | Funcional (AWS via `/api/billing`, outros via upload) |
-| 2 | **Cross-Cloud Quotation** — mapeamento automático de serviços | Funcional (via `/api/analyze`) |
-| 3 | **Portability Score** — análise de lock-in vendor | Scaffolded |
-| 4 | **Migration Automation** — receitas de migração passo-a-passo | Scaffolded |
-| 5 | **AI Insights "The Brain"** — proposta personalizada com Claude | Scaffolded |
+### `POST /api/analyze`
+Upload de billing → Claude Sonnet → análise completa. Timeout 120s. Requer `ANTHROPIC_API_KEY`.
+
+### `POST /api/billing`
+Integração direta com AWS Cost Explorer. Credenciais fornecidas pelo usuário na UI.
 
 ---
 
-## Integrações Externas
-
-| Serviço | Uso | Auth |
-|---------|-----|------|
-| Anthropic Claude API | Análise de billing + web search de preços | `ANTHROPIC_API_KEY` env |
-| AWS Cost Explorer | Dados de custo em tempo real | Access Key + Secret (via UI) |
-| AWS STS | Validação de credenciais | Mesmas do Cost Explorer |
-| Fontes de preço (via web search) | aws.amazon.com/pricing, cloud.google.com, azure.microsoft.com, oracle.com, infracost.io | Claude faz as buscas |
+## Mascote: Orla
+Polvo SVG animado (`OrlaMascot.tsx`). 4 moods: `default`, `thinking`, `happy`, `idle`.  
+Persona IA: analista CFA, tom consultivo, PT-BR.
 
 ---
 
-## Decisões de Arquitetura Relevantes
-
-1. **Sem banco de dados** — plataforma stateless por design. Análises não são persistidas no servidor.
-2. **Claude como motor principal** — toda inteligência de análise e recomendação passa pelo Claude Sonnet 4.6.
-3. **Web search no servidor** — Claude busca preços reais em tempo de análise (não hardcoded), usando até 4 searches por requisição.
-4. **Credenciais AWS passadas pela UI** — o usuário fornece as chaves no formulário; elas não ficam no servidor além da duração da requisição.
-5. **App Router do Next.js** — toda a estrutura usa o novo paradigma de App Router, não Pages Router.
-6. **Timeout longo (120s)** — necessário por causa das web searches do Claude para buscar preços atuais.
-
----
-
-## Como Rodar Localmente
+## Como Rodar
 
 ```bash
-# Instalar dependências
+# Frontend
 npm install
+echo "ANTHROPIC_API_KEY=sua_chave" > .env.local
+npm run dev   # porta 3000
 
-# Criar arquivo .env.local
-echo "ANTHROPIC_API_KEY=sua_chave_aqui" > .env.local
-
-# Desenvolvimento
-npm run dev
-
-# Build de produção
-npm run build && npm start
+# Backend (separado)
+cd backend && npm run start:dev   # porta 3001
 ```
