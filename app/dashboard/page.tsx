@@ -1,6 +1,15 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import OrlaMascot from "@/app/components/OrlaMascot";
+import {
+  toBillingViewModel,
+  type BillingViewModel as BillingData,
+  type PipelineProgressEvent,
+  type PipelineResult,
+  type PipelineStep,
+  type RecommendationView as Recommendation,
+  type ServiceCompRow,
+} from "@/lib/billing-contract";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar,
@@ -11,11 +20,16 @@ import {
   CheckCircle, Zap, ArrowRight, Gift, Shield,
 } from "lucide-react";
 
-/* ── Tipos ─────────────────────────────────────────── */
-interface ServiceCost   { name: string; cost: number; percentage: number }
-interface DailyTotal    { date: string; total: number }
-interface CrossCloudRow { provider: string; estimatedCost: number; saving: number; savingPct: number; isCurrentProvider: boolean }
-interface ServiceCompRow { name: string; currentCost: number; aws: number; gcp: number; azure: number; oci: number }
+/* ── Constantes ────────────────────────────────────── */
+const SERVICE_COLORS = ["#b3fe71","#22d3ee","#f59e0b","#f472b6","#818cf8","#34d399","#fb923c","#a78bfa"];
+const PROVIDER_COLORS: Record<string, string> = {
+  AWS: "#f97316", GCP: "#3b82f6", AZURE: "#06b6d4", Azure: "#06b6d4", OCI: "#b3fe71",
+};
+const COMPLEXITY_COLOR: Record<string, string> = {
+  "Baixa": "#b3fe71", "Média": "#f59e0b", "Alta": "#ef4444",
+};
+const MAX_FILE_BYTES = 400 * 1024;
+
 interface FreeTierOpportunity {
   provider: string;
   service: string;
@@ -24,52 +38,65 @@ interface FreeTierOpportunity {
   eligible: boolean;
 }
 
-interface Recommendation {
-  provider: string;
-  estimatedCost: number;
-  saving: number;
-  savingPct: number;
-  migrationComplexity: string;
-  reasons: string[];
-  topServices: string[];
-  caf_justification?: string;
-}
-
-interface BillingData {
-  provider: string;
-  period: { start: string; end: string };
-  totalCost: number;
-  currency: string;
-  services: ServiceCost[];
-  dailyTotals: DailyTotal[];
-  crossCloud: CrossCloudRow[];
-  serviceComparison: ServiceCompRow[];
-  freeTierOpportunities?: FreeTierOpportunity[];
-  recommendation: Recommendation;
-  insights: string[];
-  summary: string;
-}
-
-/* ── Constantes ────────────────────────────────────── */
-const SERVICE_COLORS = ["#b3fe71","#22d3ee","#f59e0b","#f472b6","#818cf8","#34d399","#fb923c","#a78bfa"];
-const PROVIDER_COLORS: Record<string, string> = {
-  AWS: "#f97316", GCP: "#3b82f6", Azure: "#06b6d4", OCI: "#b3fe71",
-};
-const COMPLEXITY_COLOR: Record<string, string> = {
-  "Baixa": "#b3fe71", "Média": "#f59e0b", "Alta": "#ef4444",
-};
-const MAX_FILE_BYTES = 400 * 1024;
-
 /* ── Helpers ───────────────────────────────────────── */
-function moeda(n: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n);
+function moeda(n: number, currency = "USD") {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency, minimumFractionDigits: 2 }).format(n);
 }
 function fmtData(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }
 
+async function readPipelineStream(
+  response: Response,
+  onEvent: (event: PipelineProgressEvent) => void,
+): Promise<PipelineResult> {
+  if (!response.body) throw new Error("O servidor não retornou o stream da análise.");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed: PipelineResult | null = null;
+
+  const processFrame = (frame: string) => {
+    const payload = frame
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!payload) return;
+
+    const event = JSON.parse(payload) as PipelineProgressEvent;
+    onEvent(event);
+    if (event.step === "error") throw new Error(event.message);
+    if (event.step === "done" && event.data) {
+      completed = event.data as PipelineResult;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const frames = buffer.split(/\r?\n\r?\n/);
+    buffer = frames.pop() ?? "";
+    frames.forEach(processFrame);
+    if (done) break;
+  }
+  if (buffer.trim()) processFrame(buffer);
+  if (!completed) throw new Error("A análise terminou sem o evento final.");
+  return completed;
+}
+
+async function readHttpError(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as { error?: string; message?: string };
+    return payload.error || payload.message || "Erro ao analisar o arquivo.";
+  } catch {
+    return "Erro ao analisar o arquivo.";
+  }
+}
+
 /* ── Sub-componente: tabela de comparação por serviço ── */
-function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRow[]; currentProvider: string }) {
+function ServiceComparisonTable({ rows, currentProvider, currency }: { rows: ServiceCompRow[]; currentProvider: string; currency: string }) {
   const providers = ["aws", "gcp", "azure", "oci"] as const;
   const providerLabels = { aws: "AWS", gcp: "GCP", azure: "Azure", oci: "OCI" };
 
@@ -96,21 +123,38 @@ function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRo
         </thead>
         <tbody>
           {rows.map((row, i) => {
-            const vals = providers.map((p) => row[p]);
-            const minVal = Math.min(...vals);
+            const vals = providers
+              .map((p) => row[p])
+              .filter((value): value is number => value != null);
+            const minVal = vals.length ? Math.min(...vals) : null;
             return (
               <tr key={i} className="border-b transition-colors" style={{ borderColor: "var(--ds-border-sub)" }}>
                 <td className="py-3 pr-4 font-medium truncate max-w-[120px]" style={{ color: "var(--ds-muted)" }}>{row.name}</td>
-                <td className="py-3 px-3 text-right font-bold" style={{ color: "var(--ds-text)" }}>{moeda(row.currentCost)}</td>
+                <td className="py-3 px-3 text-right font-bold" style={{ color: "var(--ds-text)" }}>{moeda(row.currentCost, currency)}</td>
                 {providers.map((p) => {
                   const val = row[p];
-                  const isBest = val === minVal;
+                  if (val == null) {
+                    return (
+                      <td
+                        key={p}
+                        className="py-3 px-3 text-right"
+                        title={row.reasons[p]}
+                      >
+                        <span style={{ color: "var(--ds-text-5)" }}>—</span>
+                        <br />
+                        <span className="text-[9px]" style={{ color: "var(--ds-text-4)" }}>
+                          não verificado
+                        </span>
+                      </td>
+                    );
+                  }
+                  const isBest = minVal != null && val === minVal;
                   const diff = val - row.currentCost;
                   const diffPct = row.currentCost > 0 ? ((diff / row.currentCost) * 100).toFixed(0) : "0";
                   return (
                     <td key={p} className="py-3 px-3 text-right">
                       <span className={`font-semibold ${isBest ? "text-[var(--ds-accent)]" : ""}`} style={!isBest ? { color: "var(--ds-text-3)" } : undefined}>
-                        {moeda(val)}
+                        {moeda(val, currency)}
                       </span>
                       <br />
                       <span className={`text-[10px] ${diff < 0 ? "text-[var(--ds-accent)]" : diff > 0 ? "text-red-400" : ""}`} style={diff === 0 ? { color: "var(--ds-text-5)" } : undefined}>
@@ -129,9 +173,10 @@ function ServiceComparisonTable({ rows, currentProvider }: { rows: ServiceCompRo
 }
 
 /* ── Sub-componente: card de recomendação final ──────── */
-function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost: number }) {
+function RecommendationCard({ rec, totalCost, currency, coveredCostPct }: { rec: Recommendation; totalCost: number; currency: string; coveredCostPct: number }) {
   const complexColor = COMPLEXITY_COLOR[rec.migrationComplexity] ?? "#f59e0b";
   const provColor = PROVIDER_COLORS[rec.provider] ?? "var(--ds-accent)";
+  const fullyVerified = rec.basedOnVerified && coveredCostPct === 100;
 
   return (
     <div
@@ -152,14 +197,16 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <div className="flex items-center gap-1 px-2 py-0.5 rounded-full border" style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border-md)" }}>
                 <Shield size={9} className="text-[var(--ds-accent)]" />
-                <span className="text-[9px] font-bold text-[var(--ds-accent)] uppercase tracking-wider">CFA Analysis</span>
+                <span className="text-[9px] font-bold text-[var(--ds-accent)] uppercase tracking-wider">
+                  {fullyVerified ? "Decisão verificada" : `Cenário parcial · ${coveredCostPct}%`}
+                </span>
               </div>
               <div className="flex items-center gap-1 px-2 py-0.5 rounded-full border" style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border-md)" }}>
-                <span className="text-[9px]" style={{ color: "var(--ds-text-5)" }}>Quave × Oracle OPN</span>
+                <span className="text-[9px]" style={{ color: "var(--ds-text-5)" }}>Catálogo local</span>
               </div>
             </div>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: provColor }}>
-              Recomendação da Orla
+              {fullyVerified ? "Recomendação calculada" : "Alternativa calculada com cobertura parcial"}
             </p>
             <h3 className="text-xl sm:text-2xl font-black" style={{ color: "var(--ds-text)" }}>{rec.provider}</h3>
           </div>
@@ -174,11 +221,11 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
             <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>economia</div>
           </div>
           <div className="text-center">
-            <div className="text-lg sm:text-xl font-black" style={{ color: "var(--ds-text)" }}>{moeda(rec.estimatedCost)}</div>
+            <div className="text-lg sm:text-xl font-black" style={{ color: "var(--ds-text)" }}>{moeda(rec.estimatedCost, currency)}</div>
             <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>custo est.</div>
           </div>
           <div className="text-center">
-            <div className="text-lg sm:text-xl font-black text-[var(--ds-accent)]">{moeda(totalCost - rec.estimatedCost)}</div>
+            <div className="text-lg sm:text-xl font-black text-[var(--ds-accent)]">{moeda(totalCost - rec.estimatedCost, currency)}</div>
             <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>poupado/mês</div>
           </div>
         </div>
@@ -193,7 +240,9 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
 
       {/* Motivos */}
       <div className="mb-4">
-        <p className="text-[10px] font-bold uppercase tracking-widest mb-2.5" style={{ color: "var(--ds-text-5)" }}>Por que migrar?</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest mb-2.5" style={{ color: "var(--ds-text-5)" }}>
+          {fullyVerified ? "Por que migrar?" : "Base do cenário parcial"}
+        </p>
         <ul className="space-y-2">
           {rec.reasons.map((r, i) => (
             <li key={i} className="flex items-start gap-2 text-sm leading-relaxed" style={{ color: "var(--ds-muted)" }}>
@@ -226,16 +275,16 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
       )}
 
       {/* Justificativa CFA */}
-      {rec.caf_justification && (
+      {rec.cfa_justification && (
         <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--ds-border)" }}>
           <div className="flex items-start gap-2.5 p-3 rounded-xl border" style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border)" }}>
             <Shield size={13} className="text-[var(--ds-accent)] flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-[10px] font-bold text-[var(--ds-accent)] uppercase tracking-widest mb-1">
-                Análise CFA — TransformCloud Intelligence
+                 Justificativa financeira — TransformCloud
               </p>
               <p className="text-xs leading-relaxed italic" style={{ color: "var(--ds-text-2)" }}>
-                &ldquo;{rec.caf_justification}&rdquo;
+                 &ldquo;{rec.cfa_justification}&rdquo;
               </p>
             </div>
           </div>
@@ -246,7 +295,7 @@ function RecommendationCard({ rec, totalCost }: { rec: Recommendation; totalCost
 }
 
 /* ── Sub-componente: free tiers ──────────────────────── */
-function FreeTierSection({ items }: { items: FreeTierOpportunity[] }) {
+function FreeTierSection({ items, currency }: { items: FreeTierOpportunity[]; currency: string }) {
   const eligible = items.filter((i) => i.eligible);
   const others   = items.filter((i) => !i.eligible);
   const totalSaving = eligible.reduce((s, i) => s + i.monthlySaving, 0);
@@ -264,7 +313,7 @@ function FreeTierSection({ items }: { items: FreeTierOpportunity[] }) {
         </div>
         {totalSaving > 0 && (
           <div className="text-right">
-            <div className="text-lg font-black text-[var(--ds-accent)]">{moeda(totalSaving)}/mês</div>
+            <div className="text-lg font-black text-[var(--ds-accent)]">{moeda(totalSaving, currency)}/mês</div>
             <div className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>economia potencial elegível</div>
           </div>
         )}
@@ -287,7 +336,7 @@ function FreeTierSection({ items }: { items: FreeTierOpportunity[] }) {
                   <span className="text-[10px]" style={{ color: "var(--ds-text-5)" }}>·</span>
                   <span className="text-xs" style={{ color: "var(--ds-text-2)" }}>{item.service}</span>
                   <span className="ml-auto text-xs font-black text-[var(--ds-accent)]">
-                    {moeda(item.monthlySaving)}/mês
+                    {moeda(item.monthlySaving, currency)}/mês
                   </span>
                 </div>
                 <p className="text-[11px] leading-snug" style={{ color: "var(--ds-text-3)" }}>{item.description}</p>
@@ -330,25 +379,25 @@ function FreeTierSection({ items }: { items: FreeTierOpportunity[] }) {
 
 /* ── Orla Loading ──────────────────────────────────── */
 const ORLA_STEPS = [
-  "Lendo estrutura do arquivo…",
-  "Identificando o provedor cloud…",
-  "Extraindo custos por serviço…",
-  "Calculando totais e tendências…",
-  "Mapeando free tiers disponíveis…",
-  "Comparando com AWS, GCP, Azure e OCI…",
-  "Avaliando complexidade de migração…",
-  "Gerando análise CFA da Orla…",
-];
+  "parsing",
+  "mapping",
+  "pricing",
+  "classification",
+  "recommendation",
+] as const;
 
-function OrlaLoading() {
-  const [step, setStep] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setStep((s) => (s + 1) % ORLA_STEPS.length), 1600);
-    return () => clearInterval(id);
-  }, []);
-
-  const pct = Math.round(((step + 1) / ORLA_STEPS.length) * 100);
+function OrlaLoading({
+  step,
+  message,
+}: {
+  step: PipelineStep | "parsing";
+  message: string;
+}) {
+  const stepIndex = Math.max(
+    0,
+    ORLA_STEPS.indexOf(step as (typeof ORLA_STEPS)[number]),
+  );
+  const pct = Math.round(((stepIndex + 1) / ORLA_STEPS.length) * 100);
 
   return (
     <div className="relative mb-5 overflow-hidden rounded-2xl border border-[#b3fe71]/20" style={{ background: "var(--ds-empty-bg)" }}>
@@ -375,19 +424,19 @@ function OrlaLoading() {
 
         {/* Lado direito — textos e progresso */}
         <div className="flex-1 min-w-0 text-center sm:text-left">
-          <p className="text-lg font-black mb-0.5" style={{ color: "var(--ds-text)" }}>Orla está analisando</p>
+          <p className="text-lg font-black mb-0.5" style={{ color: "var(--ds-text)" }}>Analisando pelo catálogo</p>
           <p className="text-xs mb-5" style={{ color: "var(--ds-text-5)" }}>
-            Análise com padrão CFA · Quave × Oracle Cloud
+            IDs nativos · preços versionados · decisão auditável
           </p>
 
           {/* Etapa atual com fade */}
           <div className="h-5 mb-4 overflow-hidden">
             <p
-              key={step}
+              key={`${step}-${message}`}
               className="text-sm text-[var(--ds-accent)] font-medium"
               style={{ animation: "fadeUp 0.4s ease forwards" }}
             >
-              {ORLA_STEPS[step]}
+              {message}
             </p>
           </div>
 
@@ -412,11 +461,11 @@ function OrlaLoading() {
                 key={i}
                 className="rounded-full transition-all duration-500"
                 style={{
-                  width: i === step ? "14px" : "5px",
+                  width: i === stepIndex ? "14px" : "5px",
                   height: "5px",
-                  background: i === step
+                  background: i === stepIndex
                     ? "var(--ds-accent)"
-                    : i < step
+                    : i < stepIndex
                     ? "rgba(132,204,22,0.45)"
                     : "rgba(255,255,255,0.07)",
                 }}
@@ -437,6 +486,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const [data, setData]       = useState<BillingData | null>(null);
+  const [progressStep, setProgressStep] = useState<PipelineStep | "parsing">("parsing");
+  const [progressMessage, setProgressMessage] = useState("Lendo e validando o arquivo…");
   const [showAll, setShowAll] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const inputRef              = useRef<HTMLInputElement>(null);
@@ -461,12 +512,16 @@ export default function DashboardPage() {
 
   function clearFile() {
     setFile(null); setData(null); setError("");
+    setProgressStep("parsing");
+    setProgressMessage("Lendo e validando o arquivo…");
     if (inputRef.current) inputRef.current.value = "";
   }
 
   async function analisar() {
     if (!file) { setError("Selecione um arquivo primeiro."); return; }
     setLoading(true); setError(""); setData(null);
+    setProgressStep("parsing");
+    setProgressMessage("Lendo e validando o arquivo…");
     try {
       const content = await file.text();
       const res = await fetch("/api/analyze", {
@@ -474,11 +529,14 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, filename: file.name }),
       });
-      const json = await res.json();
-      if (!res.ok) { setError(json.error || "Erro ao analisar o arquivo."); return; }
-      setData(json as BillingData);
-    } catch {
-      setError("Erro de rede. Verifique sua conexão e tente novamente.");
+      if (!res.ok) throw new Error(await readHttpError(res));
+      const result = await readPipelineStream(res, (event) => {
+        setProgressStep(event.step);
+        setProgressMessage(event.message);
+      });
+      setData(toBillingViewModel(result));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro de rede. Verifique sua conexão e tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -486,10 +544,16 @@ export default function DashboardPage() {
 
   /* ── Derivações ─────────────────────────────────── */
   const servicos  = data ? (showAll ? data.services : data.services.slice(0, 6)) : [];
-  const bestAlt   = data?.crossCloud.find((r) =>
-    !r.isCurrentProvider && r.savingPct > 0 &&
-    r.savingPct === Math.max(...(data.crossCloud.filter((x) => !x.isCurrentProvider && x.savingPct > 0).map((x) => x.savingPct)))
-  );
+  const alternatives = data?.crossCloud.filter(
+    (row) => !row.isCurrentProvider && row.savingPct != null && row.savingPct > 0,
+  ) ?? [];
+  const bestAlt = alternatives.sort(
+    (a, b) => (b.savingPct ?? 0) - (a.savingPct ?? 0),
+  )[0];
+  const isPartialComparison = Boolean(bestAlt && bestAlt.coveredCostPct < 100);
+  const recommendationCoverage = data?.crossCloud.find(
+    (row) => row.provider === data.recommendation.provider,
+  )?.coveredCostPct ?? 0;
   const crossData = data?.crossCloud.map((r) => ({
     ...r,
     fill: PROVIDER_COLORS[r.provider] ?? "#666",
@@ -510,7 +574,7 @@ export default function DashboardPage() {
             Orla — Cloud Intelligence
           </h1>
           <p className="text-xs sm:text-sm" style={{ color: "var(--ds-text-5)" }}>
-            Análise com padrão CFA · Quave × Oracle Cloud · Zero lock-in
+            Catálogo versionado · equivalências auditáveis · zero lock-in
           </p>
         </div>
       </div>
@@ -578,12 +642,12 @@ export default function DashboardPage() {
           className="mt-4 flex items-center gap-2 px-5 py-2.5 bg-[#b3fe71] text-black font-bold text-sm rounded-xl hover:bg-[#65a30d] disabled:opacity-40 disabled:cursor-not-allowed transition-colors active:scale-[0.98]"
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          {loading ? "Orla está analisando…" : "Analisar com Orla"}
+          {loading ? "Consultando o catálogo…" : "Analisar billing"}
         </button>
       </div>
 
       {/* ── LOADING ─────────────────────────────────── */}
-      {loading && <OrlaLoading />}
+      {loading && <OrlaLoading step={progressStep} message={progressMessage} />}
 
       {/* ── RESULTADOS ──────────────────────────────── */}
       {data && !loading && (
@@ -602,21 +666,28 @@ export default function DashboardPage() {
             </div>
           )}
 
+          <div className="flex flex-wrap items-center gap-2 text-[11px] px-3 py-2 rounded-xl border" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)", color: "var(--ds-text-3)" }}>
+            <Shield size={12} className="text-[var(--ds-accent)]" />
+            <span><strong>{data.meta.coveredCostPct}%</strong> do custo com preço verificado</span>
+            <span style={{ color: "var(--ds-text-4)" }}>·</span>
+            <span>{data.meta.verifiedServices}/{data.meta.analyzedServices} serviços cobertos</span>
+          </div>
+
           {/* Cards KPI */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               { icon: DollarSign, label: "Custo Total", highlight: false,
-                value: moeda(data.totalCost),
+                value: moeda(data.totalCost, data.currency),
                 sub: `${fmtData(data.period.start)} – ${fmtData(data.period.end)}` },
               { icon: Server, label: "Provedor Atual", highlight: false,
                 value: data.provider,
                 sub: `${data.services.length} serviços` },
-              { icon: TrendingDown, label: "Melhor Alternativa", highlight: true,
-                value: bestAlt ? `-${bestAlt.savingPct}%` : "—",
+              { icon: TrendingDown, label: bestAlt && bestAlt.coveredCostPct < 100 ? "Alternativa Parcial" : "Melhor Alternativa", highlight: true,
+                value: bestAlt?.savingPct != null ? `-${bestAlt.savingPct}%` : "—",
                 sub: bestAlt?.provider ?? "sem dados" },
-              { icon: DollarSign, label: "Economia Potencial", highlight: true,
-                value: bestAlt ? moeda(data.totalCost - bestAlt.estimatedCost) : "—",
-                sub: "por mês" },
+              { icon: DollarSign, label: isPartialComparison ? "Economia na Parcela Coberta" : "Economia Potencial", highlight: true,
+                value: bestAlt?.saving != null ? moeda(bestAlt.saving, data.currency) : "—",
+                sub: isPartialComparison ? `${bestAlt?.coveredCostPct ?? 0}% do custo comparado` : "por mês" },
             ].map((card) => (
               <div key={card.label} className="border rounded-2xl p-4 sm:p-5" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
                 <div className="flex items-center gap-1.5 mb-2">
@@ -652,7 +723,7 @@ export default function DashboardPage() {
                   <Tooltip
                     contentStyle={{ background: "var(--ds-tooltip-bg)", border: "1px solid var(--ds-border)", borderRadius: "10px", color: "var(--ds-text)", fontSize: 12 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(v: any) => [moeda(Number(v)), "Custo"]}
+                    formatter={(v: any) => [moeda(Number(v), data.currency), "Custo"]}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     labelFormatter={(d: any) => fmtData(String(d))}
                   />
@@ -667,7 +738,9 @@ export default function DashboardPage() {
             <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
               <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Comparação Cross-Cloud</h3>
               <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>
-                Custo estimado da mesma infraestrutura em outros provedores
+                {isPartialComparison
+                  ? "Somente itens verificados são comparados; os demais permanecem no custo atual"
+                  : "Custo estimado da mesma infraestrutura em outros provedores"}
               </p>
               <ResponsiveContainer width="100%" height={180}>
                 <BarChart data={crossData} barSize={38} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -678,7 +751,7 @@ export default function DashboardPage() {
                   <Tooltip
                     contentStyle={{ background: "var(--ds-tooltip-bg)", border: "1px solid var(--ds-border)", borderRadius: "10px", color: "var(--ds-text)", fontSize: 12 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(v: any) => [moeda(Number(v)), "Custo Est."]}
+                    formatter={(v: any) => [moeda(Number(v), data.currency), "Custo Est."]}
                   />
                   <Bar dataKey="estimatedCost" radius={[6, 6, 0, 0]} />
                 </BarChart>
@@ -689,10 +762,10 @@ export default function DashboardPage() {
                     <span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.fill }} />
                     <span style={{ color: "var(--ds-text-3)" }}>{p.provider}</span>
                     {p.isCurrentProvider && <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>(atual)</span>}
-                    {!p.isCurrentProvider && p.savingPct > 0 && (
+                    {!p.isCurrentProvider && p.savingPct != null && p.savingPct > 0 && (
                       <span className="font-bold text-[var(--ds-accent)]">-{p.savingPct}%</span>
                     )}
-                    {!p.isCurrentProvider && p.savingPct < 0 && (
+                    {!p.isCurrentProvider && p.savingPct != null && p.savingPct < 0 && (
                       <span className="font-bold text-red-400">+{Math.abs(p.savingPct)}%</span>
                     )}
                   </div>
@@ -711,6 +784,7 @@ export default function DashboardPage() {
               <ServiceComparisonTable
                 rows={data.serviceComparison}
                 currentProvider={data.provider}
+                currency={data.currency}
               />
             </div>
           )}
@@ -732,7 +806,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>{s.percentage.toFixed(1)}%</span>
-                          <span className="text-xs sm:text-sm font-bold" style={{ color: "var(--ds-text)" }}>{moeda(s.cost)}</span>
+                          <span className="text-xs sm:text-sm font-bold" style={{ color: "var(--ds-text)" }}>{moeda(s.cost, data.currency)}</span>
                         </div>
                       </div>
                       <div className="w-full rounded-full h-1.5" style={{ background: "var(--ds-bar-bg)" }}>
@@ -756,12 +830,17 @@ export default function DashboardPage() {
 
           {/* ── FREE TIERS ──────────────────────────── */}
           {data.freeTierOpportunities && data.freeTierOpportunities.length > 0 && (
-            <FreeTierSection items={data.freeTierOpportunities} />
+            <FreeTierSection items={data.freeTierOpportunities} currency={data.currency} />
           )}
 
           {/* ── RECOMENDAÇÃO FINAL ───────────────────── */}
           {data.recommendation && (
-            <RecommendationCard rec={data.recommendation} totalCost={data.totalCost} />
+            <RecommendationCard
+              rec={data.recommendation}
+              totalCost={data.totalCost}
+              currency={data.currency}
+              coveredCostPct={recommendationCoverage}
+            />
           )}
 
           {/* Insights */}
@@ -796,8 +875,8 @@ export default function DashboardPage() {
             Olá, sou a Orla.
           </h3>
           <p className="text-xs sm:text-sm max-w-sm mx-auto leading-relaxed" style={{ color: "var(--ds-text-5)" }}>
-            Envie seu arquivo de billing e eu analiso seus custos, comparo os 4 grandes provedores,
-            mapeio free tiers e gero uma recomendação com padrão CFA — em minutos.
+            Envie seu arquivo de billing para comparar serviços e preços presentes no catálogo local,
+            com cobertura explícita e sem estimativas inventadas.
           </p>
           <p className="mt-3 text-[10px]" style={{ color: "var(--ds-text-4)" }}>
             AWS Cost Explorer · GCP Billing · Azure Cost Analysis · OCI Cost Report

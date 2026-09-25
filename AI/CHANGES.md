@@ -5,6 +5,41 @@
 
 ---
 
+## [2026-09-25] — Transparência para cobertura parcial
+
+**Objetivo:** impedir que preços com equivalência parcial sejam apresentados como mapeamento verificado.
+
+**Arquivos alterados:**
+- `lib/billing-contract.ts` — mostra custo de destino somente quando o status é `verified` e a moeda é compatível.
+- `app/dashboard/page.tsx` — identifica explicitamente alternativas e cenários com cobertura parcial.
+
+**Validação:** TypeScript e ESLint passaram nos arquivos alterados.
+
+---
+
+## [2026-09-25] — Frontend conectado ao catálogo determinístico
+
+**Objetivo:** remover do frontend a análise completa por IA e consumir o pipeline versionado do backend.
+
+**Arquivos criados:**
+- `lib/billing-parser.ts` — parser determinístico de JSON e arquivos delimitados.
+- `lib/billing-contract.ts` — contratos do SSE e adaptação transparente para a UI.
+- `test/fixtures/aws-compute-demo.csv` — cenário de teste do parser sem JSON pré-estruturado.
+- `AI/MODULES/BILLING_FRONTEND.md` — operação, formatos, teste e limites.
+
+**Arquivos alterados:**
+- `app/api/analyze/route.ts` — removida chamada Anthropic/web search; agora faz parse e proxy streaming do NestJS.
+- `app/dashboard/page.tsx` — consome SSE real, mostra cobertura e não preenche preços ausentes.
+- `.env.example` — URLs privada e pública do backend.
+- `package.json` e `package-lock.json` — removida dependência direta do SDK Anthropic.
+- `AI/PROJECT_CONTEXT.md` e `AI/ARCHITECTURE_BILLING_V2.md` — arquitetura atualizada.
+
+**Validação:** TypeScript e ESLint passaram. O proxy SSE foi executado contra o backend local e concluiu com recomendação GCP, cobertura de 100% e evento `done`.
+
+**Limites:** parser baseado em aliases; novos formatos de export devem ganhar fixtures e aliases explícitos.
+
+---
+
 ## Como usar este arquivo
 
 Sempre que uma sessão de IA fizer mudanças no projeto, adicione uma entrada no topo deste arquivo seguindo o formato abaixo:

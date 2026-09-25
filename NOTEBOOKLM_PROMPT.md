@@ -2,6 +2,8 @@
 
 Use este documento como fonte primária para entender o produto, a identidade visual, a arquitetura técnica e a voz da marca.
 
+> Atualização de arquitetura — 2026-09-25: o fluxo de billing agora usa parser determinístico no frontend e catálogo versionado no backend NestJS. IA não cria serviços, SKUs, equivalências, preços nem escolhe o provedor. As seções de análise abaixo já refletem esse modelo.
+
 ---
 
 ## 1. O QUE É O TRANSFORMCLOUD
@@ -13,9 +15,9 @@ Use este documento como fonte primária para entender o produto, a identidade vi
 
 ### Proposta de valor
 - Upload do arquivo de billing → análise completa em segundos
-- Comparação real dos 4 provedores com preços estimados por serviço
+- Comparação dos provedores com preços presentes no catálogo versionado e cobertura explícita
 - Plano de migração com complexidade, motivos e justificativa CFA
-- Identificação de free tiers não utilizados
+- Lacunas de cobertura exibidas sem estimativas inventadas
 - Score de portabilidade por serviço (o quanto é fácil sair do provedor atual)
 - Zero retenção de dados — análise acontece em tempo real, sem armazenar informações sensíveis
 
@@ -45,8 +47,9 @@ Use este documento como fonte primária para entender o produto, a identidade vi
 | Ícones | Lucide React |
 | Gráficos | Recharts 3 |
 | Fonte | Poppins (Google Fonts) — pesos 400, 500, 600, 700, 900 |
-| Backend | Next.js App Router + API Routes |
-| IA | Claude Opus 4.7 com adaptive thinking (Anthropic SDK) |
+| BFF | Next.js Route Handler para parse e proxy SSE |
+| Backend | NestJS 11 + PostgreSQL + Prisma 7 |
+| IA | Opcional no backend, somente para redação da explicação |
 | AWS | AWS SDK v3 — CostExplorer para conexão direta |
 | Deploy | Vercel (inferido pela estrutura) |
 
@@ -281,39 +284,27 @@ Layout com sidebar fixa (desktop) e top bar (mobile).
 ## 8. LÓGICA DE ANÁLISE (API)
 
 ### Endpoint `/api/analyze`
-- **Modelo**: Claude Opus 4.7 com `adaptive` thinking
-- **Input**: conteúdo do arquivo de billing (CSV/JSON/TXT, máx 400KB) + nome do arquivo
-- **Output**: JSON estruturado com todos os dados de análise
+- **Input**: conteúdo do arquivo de billing (CSV/JSON/TXT, máx. 400 KB) + nome do arquivo
+- **Parsing**: regras determinísticas e aliases conhecidos em `lib/billing-parser.ts`
+- **Processamento**: proxy para `POST /api/billing/analyze/stream` no backend NestJS
+- **Output**: eventos SSE com progresso, cobertura, preços, recomendação e payback
 
-### Persona do sistema
-O prompt de sistema define o Orla como:
-> Analista CFA certificado desde 2018, especialista FinOps, autoridade Mario Perino (CRO Quave), parceiro Oracle OPN. Tom direto, sem rodeios, foco em ROI mensurável.
+### Fonte dos dados
 
-### Multiplicadores de preço por provedor
-| Provedor | Multiplicador vs AWS |
-|----------|---------------------|
-| AWS | 1.00x (base) |
-| GCP | 0.78x |
-| Azure | 0.88x |
-| OCI | 0.60x |
+- Serviços, ofertas, SKUs, medidores e tiers ficam no catálogo local do backend.
+- Mapeamento usa identidade nativa, região, arquitetura, sistema operacional, vCPU e memória.
+- Ranking considera apenas itens com preço `verified` e na mesma moeda.
+- Itens sem dados aparecem como “não verificado”; não existem multiplicadores de fallback.
+- A IA opcional pode melhorar a redação, mas não pode alterar a decisão calculada.
 
-(Ajustes por tipo de serviço: OCI melhor em Compute/Storage, GCP em ML/BigQuery, Azure em enterprise/AD)
-
-### Estrutura de output da análise
+### Estrutura do resultado final
 ```
-provider, period, totalCost, currency,
-services[],           // top serviços com custo e percentual
-dailyTotals[],        // evolução diária
-crossCloud[],         // comparação dos 4 provedores
-serviceComparison[], // custo por serviço em cada provedor
-freeTierOpportunities[], // free tiers elegíveis
-recommendation {
-  provider, estimatedCost, saving, savingPct,
-  migrationComplexity, reasons[], topServices[],
-  caf_justification   // justificativa financeira CFA
-},
-insights[],           // 3 insights acionáveis
-summary               // resumo executivo tom Mario Perino
+meta { analyzedServices, verifiedServices, coveredCostPct, analysisDate },
+billing { provider, period, currency, totalCost, lineItems[], topServices[] },
+mappings { mappings[], unmapped[] },
+prices { classified[], meta },
+recommendation { recommendation, insights, summary },
+payback { basedOnVerified, monthlySaving, paybackMonths, roi12m, roi24m, roi36m }
 ```
 
 ---
