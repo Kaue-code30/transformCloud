@@ -546,6 +546,7 @@ function inferCurrencyFromHeaders(row: NormalizedRow): string {
 
 function inferUnit(provider: CloudProvider, usageType: string): string {
   if (provider !== "AWS" || !usageType) return "unit";
+  if (/kms-keys/i.test(usageType)) return "Key-Mo";
   if (/gb-?seconds?/i.test(usageType)) return "GB-Seconds";
   if (/v?cpu-?hours?|vcpu-?hrs?/i.test(usageType)) return "vCPU-Hours";
   if (/bytehrs|storage.*bytes?/i.test(usageType)) return "GB-Mo";
