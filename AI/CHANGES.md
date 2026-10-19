@@ -5,6 +5,18 @@
 
 ---
 
+## [2026-10-05] — Roteiro do vídeo de apresentação
+
+**Objetivo:** documentar a apresentação do produto pelo fluxo real que o cliente percorre no frontend.
+
+**Arquivo criado:**
+- `AI/ROTEIRO_VIDEO_APRESENTACAO.md` — preparação do ambiente, roteiro de 5 a 7 minutos, falas sugeridas, resultados esperados, explicação técnica, limites de comunicação, contingências e versão curta.
+
+**Descrição:**
+O roteiro orienta a demonstração desde a landing page até a recomendação financeira. Ele diferencia cobertura geral de cobertura por provedor, explica que preços e equivalências vêm do catálogo determinístico e registra os limites atuais para evitar afirmações comerciais incorretas durante o vídeo.
+
+---
+
 ## [2026-09-25] — Transparência para cobertura parcial
 
 **Objetivo:** impedir que preços com equivalência parcial sejam apresentados como mapeamento verificado.

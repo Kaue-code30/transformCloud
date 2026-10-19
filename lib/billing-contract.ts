@@ -2,6 +2,23 @@ export type CloudProvider = "AWS" | "GCP" | "AZURE" | "OCI";
 
 export type VerificationStatus = "verified" | "partial" | "not_found" | "no_api";
 
+export interface MigrationAttentionPoint {
+  service: string;
+  status: Exclude<VerificationStatus, "verified">;
+  reason: string;
+}
+
+export interface MigrationComplexityDetails {
+  basis: "catalog_compatibility";
+  isMigration: boolean;
+  summary: string;
+  verifiedServices: number;
+  totalServices: number;
+  coveredCostPct: number;
+  attentionPoints: MigrationAttentionPoint[];
+  disclaimer: string;
+}
+
 export interface BillingLineItem {
   sourceKey?: string;
   provider: CloudProvider;
@@ -96,6 +113,7 @@ export interface PipelineResult {
       provider: CloudProvider;
       basedOnVerified: boolean;
       migrationComplexity: string;
+      migrationComplexityDetails?: MigrationComplexityDetails;
       reasons: string[];
       topServices: string[];
       cfa_justification: string;
@@ -140,6 +158,16 @@ export interface ServiceCost {
   percentage: number;
 }
 
+export type ServiceCategory =
+  | "Computação"
+  | "Containers e serverless"
+  | "Banco de dados"
+  | "Armazenamento"
+  | "Rede"
+  | "Segurança"
+  | "Observabilidade"
+  | "Outros";
+
 export interface CrossCloudRow {
   provider: CloudProvider;
   estimatedCost: number | null;
@@ -167,6 +195,7 @@ export interface RecommendationView {
   saving: number;
   savingPct: number;
   migrationComplexity: string;
+  migrationComplexityDetails?: MigrationComplexityDetails;
   reasons: string[];
   topServices: string[];
   cfa_justification?: string;
@@ -178,6 +207,7 @@ export interface BillingViewModel {
   totalCost: number;
   currency: string;
   services: ServiceCost[];
+  categories: ServiceCost[];
   dailyTotals: Array<{ date: string; total: number }>;
   crossCloud: CrossCloudRow[];
   serviceComparison: ServiceCompRow[];
@@ -199,6 +229,12 @@ const PROVIDERS: CloudProvider[] = ["AWS", "GCP", "AZURE", "OCI"];
 
 export function toBillingViewModel(result: PipelineResult): BillingViewModel {
   const { billing, prices } = result;
+  const services = billing.topServices.map((service) => ({
+    name: service.name,
+    cost: service.cost,
+    percentage: service.pct,
+    category: categoryForService(service, billing.lineItems ?? []),
+  }));
   const crossCloud = PROVIDERS.map((provider) =>
     buildProviderProjection(result, provider),
   );
@@ -215,11 +251,12 @@ export function toBillingViewModel(result: PipelineResult): BillingViewModel {
     period: billing.period,
     totalCost: billing.totalCost,
     currency: billing.currency,
-    services: billing.topServices.map((service) => ({
+    services: services.map((service) => ({
       name: service.name,
       cost: service.cost,
-      percentage: service.pct,
+      percentage: service.percentage,
     })),
+    categories: aggregateCategories(services, billing.totalCost),
     dailyTotals: [],
     crossCloud,
     serviceComparison: prices.classified.map((price) => ({
@@ -251,6 +288,8 @@ export function toBillingViewModel(result: PipelineResult): BillingViewModel {
       migrationComplexity: complexityLabel(
         result.recommendation.recommendation.migrationComplexity,
       ),
+      migrationComplexityDetails:
+        result.recommendation.recommendation.migrationComplexityDetails,
       reasons: result.recommendation.recommendation.reasons,
       topServices: result.recommendation.recommendation.topServices,
       cfa_justification:
@@ -261,6 +300,96 @@ export function toBillingViewModel(result: PipelineResult): BillingViewModel {
     meta: result.meta,
     payback: result.payback.payback,
   };
+}
+
+function aggregateCategories(
+  services: Array<ServiceCost & { category: ServiceCategory }>,
+  totalCost: number,
+): ServiceCost[] {
+  const totals = new Map<ServiceCategory, number>();
+  services.forEach((service) => {
+    totals.set(service.category, (totals.get(service.category) ?? 0) + service.cost);
+  });
+
+  return Array.from(totals, ([name, cost]) => ({
+    name,
+    cost: rounded(cost),
+    percentage: totalCost > 0 ? (cost / totalCost) * 100 : 0,
+  })).sort((a, b) => b.cost - a.cost);
+}
+
+function categoryForService(
+  service: TopService,
+  lineItems: BillingLineItem[],
+): ServiceCategory {
+  const lineItem = lineItems.find((item) =>
+    service.sourceLineItemKey
+      ? item.sourceKey === service.sourceLineItemKey
+      : item.serviceName === service.name || item.serviceCode === service.name,
+  );
+  const attributes = lineItem?.attributes
+    ? Object.values(lineItem.attributes).join(" ")
+    : "";
+  const searchable = normalizeCategoryText([
+    service.name,
+    service.specs,
+    service.nativeSkuName,
+    lineItem?.serviceCode,
+    lineItem?.serviceName,
+    lineItem?.usageType,
+    lineItem?.operation,
+    attributes,
+  ].filter(Boolean).join(" "));
+
+  if (matchesCategory(searchable, [
+    "data transfer", "data_transfer", "datatransfer", "bandwidth", "network",
+    "vpc", "vpn", "load balanc", "load_balanc", "nat gateway", "cloud nat",
+    "cloudfront", "cdn", "dns", "route 53", "traffic",
+  ])) return "Rede";
+
+  if (matchesCategory(searchable, [
+    "kubernetes", "container", "serverless", "lambda", "cloud function",
+    "cloud run", "function app", "app service", "eks", "aks", "gke", "oke",
+  ])) return "Containers e serverless";
+
+  if (matchesCategory(searchable, [
+    "database", "postgres", "mysql", "mariadb", "oracle db", "sql server",
+    "cloud sql", "rds", "aurora", "dynamodb", "cosmos db", "spanner",
+    "bigtable", "redis", "cache", "db system", "managed db",
+  ])) return "Banco de dados";
+
+  if (matchesCategory(searchable, [
+    "storage", "object store", "object_store", "block store", "block_storage",
+    "blob", "bucket", "volume", "disk", "s3", "ebs", "efs", "filestore",
+  ])) return "Armazenamento";
+
+  if (matchesCategory(searchable, [
+    "security", "firewall", "waf", "shield", "defender", "key vault",
+    "kms", "secret manager", "cloud guard", "security center",
+  ])) return "Segurança";
+
+  if (matchesCategory(searchable, [
+    "observability", "monitor", "logging", "log analytics", "cloudwatch",
+    "cloud trace", "cloud audit", "application insights", "metrics",
+  ])) return "Observabilidade";
+
+  if (matchesCategory(searchable, [
+    "compute", "virtual machine", "virtual machines", "instance", "ec2",
+    "vmware", "bare metal", "machine type", "shape",
+  ])) return "Computação";
+
+  return "Outros";
+}
+
+function normalizeCategoryText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function matchesCategory(value: string, terms: string[]): boolean {
+  return terms.some((term) => value.includes(term));
 }
 
 function buildProviderProjection(

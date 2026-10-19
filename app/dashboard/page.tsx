@@ -101,16 +101,21 @@ function ServiceComparisonTable({ rows, currentProvider, currency }: { rows: Ser
   const providerLabels = { aws: "AWS", gcp: "GCP", azure: "Azure", oci: "OCI" };
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs sm:text-sm min-w-[520px]">
+    <div className="overflow-x-auto rounded-lg">
+      <table className="w-full min-w-[820px] table-fixed text-xs sm:text-sm">
         <thead>
           <tr className="border-b" style={{ borderColor: "var(--ds-border)" }}>
-            <th className="text-left py-2.5 pr-4 font-semibold w-32" style={{ color: "var(--ds-text-5)" }}>Serviço</th>
-            <th className="text-right py-2.5 px-3 font-semibold" style={{ color: "var(--ds-text-5)" }}>Atual</th>
+            <th
+              className="sticky left-0 z-20 w-60 px-3 py-2.5 text-left font-semibold"
+              style={{ color: "var(--ds-text-5)", background: "var(--ds-card)" }}
+            >
+              Serviço
+            </th>
+            <th className="w-28 px-3 py-2.5 text-right font-semibold" style={{ color: "var(--ds-text-5)" }}>Atual</th>
             {providers.map((p) => (
               <th
                 key={p}
-                className="text-right py-2.5 px-3 font-semibold"
+                className="w-28 px-3 py-2.5 text-right font-semibold"
                 style={{ color: PROVIDER_COLORS[providerLabels[p]] }}
               >
                 {providerLabels[p]}
@@ -129,15 +134,20 @@ function ServiceComparisonTable({ rows, currentProvider, currency }: { rows: Ser
             const minVal = vals.length ? Math.min(...vals) : null;
             return (
               <tr key={i} className="border-b transition-colors" style={{ borderColor: "var(--ds-border-sub)" }}>
-                <td className="py-3 pr-4 font-medium truncate max-w-[120px]" style={{ color: "var(--ds-muted)" }}>{row.name}</td>
-                <td className="py-3 px-3 text-right font-bold" style={{ color: "var(--ds-text)" }}>{moeda(row.currentCost, currency)}</td>
+                <td
+                  className="sticky left-0 z-10 whitespace-normal break-words px-3 py-3 align-top text-sm font-semibold leading-snug sm:text-base"
+                  style={{ color: "var(--ds-text)", background: "var(--ds-card)" }}
+                >
+                  {row.name}
+                </td>
+                <td className="whitespace-nowrap px-3 py-3 text-right align-top font-bold" style={{ color: "var(--ds-text)" }}>{moeda(row.currentCost, currency)}</td>
                 {providers.map((p) => {
                   const val = row[p];
                   if (val == null) {
                     return (
                       <td
                         key={p}
-                        className="py-3 px-3 text-right"
+                        className="whitespace-nowrap px-3 py-3 text-right align-top"
                         title={row.reasons[p]}
                       >
                         <span style={{ color: "var(--ds-text-5)" }}>—</span>
@@ -152,7 +162,7 @@ function ServiceComparisonTable({ rows, currentProvider, currency }: { rows: Ser
                   const diff = val - row.currentCost;
                   const diffPct = row.currentCost > 0 ? ((diff / row.currentCost) * 100).toFixed(0) : "0";
                   return (
-                    <td key={p} className="py-3 px-3 text-right">
+                    <td key={p} className="whitespace-nowrap px-3 py-3 text-right align-top">
                       <span className={`font-semibold ${isBest ? "text-[var(--ds-accent)]" : ""}`} style={!isBest ? { color: "var(--ds-text-3)" } : undefined}>
                         {moeda(val, currency)}
                       </span>
@@ -172,11 +182,18 @@ function ServiceComparisonTable({ rows, currentProvider, currency }: { rows: Ser
   );
 }
 
+function migrationStatusLabel(status: "partial" | "not_found" | "no_api") {
+  if (status === "partial") return "Validação parcial";
+  if (status === "no_api") return "Sem consulta automática";
+  return "Sem equivalência verificada";
+}
+
 /* ── Sub-componente: card de recomendação final ──────── */
 function RecommendationCard({ rec, totalCost, currency, coveredCostPct }: { rec: Recommendation; totalCost: number; currency: string; coveredCostPct: number }) {
   const complexColor = COMPLEXITY_COLOR[rec.migrationComplexity] ?? "#f59e0b";
   const provColor = PROVIDER_COLORS[rec.provider] ?? "var(--ds-accent)";
   const fullyVerified = rec.basedOnVerified && coveredCostPct === 100;
+  const complexityDetails = rec.migrationComplexityDetails;
 
   return (
     <div
@@ -232,10 +249,97 @@ function RecommendationCard({ rec, totalCost, currency, coveredCostPct }: { rec:
       </div>
 
       {/* Complexidade */}
-      <div className="flex items-center gap-2 mb-4">
-        <Zap size={13} style={{ color: complexColor }} />
-        <span className="text-xs" style={{ color: "var(--ds-text-3)" }}>Complexidade de migração:</span>
-        <span className="text-xs font-bold" style={{ color: complexColor }}>{rec.migrationComplexity}</span>
+      <div className="mb-4 rounded-xl border p-3 sm:p-4" style={{ background: "var(--ds-hover)", borderColor: "var(--ds-border)" }}>
+        <div className="flex items-center gap-2">
+          <Zap size={14} style={{ color: complexColor }} />
+          <span className="text-xs font-semibold" style={{ color: "var(--ds-text-2)" }}>Complexidade de migração</span>
+          <span
+            className="rounded-full px-2 py-0.5 text-xs font-bold"
+            style={{ color: complexColor, background: `${complexColor}18` }}
+          >
+            {rec.migrationComplexity}
+          </span>
+        </div>
+
+        {complexityDetails && (
+          <div className="mt-3">
+            <p className="text-sm leading-relaxed" style={{ color: "var(--ds-muted)" }}>
+              {complexityDetails.summary}
+            </p>
+
+            {complexityDetails.isMigration && (
+              <>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg border p-2" style={{ borderColor: "var(--ds-border-sub)" }}>
+                    <p className="text-sm font-bold" style={{ color: "var(--ds-text)" }}>
+                      {complexityDetails.verifiedServices}/{complexityDetails.totalServices}
+                    </p>
+                    <p className="text-[10px] leading-tight" style={{ color: "var(--ds-text-5)" }}>serviços verificados</p>
+                  </div>
+                  <div className="rounded-lg border p-2" style={{ borderColor: "var(--ds-border-sub)" }}>
+                    <p className="text-sm font-bold" style={{ color: "var(--ds-text)" }}>{complexityDetails.coveredCostPct}%</p>
+                    <p className="text-[10px] leading-tight" style={{ color: "var(--ds-text-5)" }}>do custo coberto</p>
+                  </div>
+                  <div className="rounded-lg border p-2" style={{ borderColor: "var(--ds-border-sub)" }}>
+                    <p className="text-sm font-bold" style={{ color: complexityDetails.attentionPoints.length ? "#f59e0b" : "var(--ds-accent)" }}>
+                      {complexityDetails.attentionPoints.length}
+                    </p>
+                    <p className="text-[10px] leading-tight" style={{ color: "var(--ds-text-5)" }}>itens para validar</p>
+                  </div>
+                </div>
+
+                {complexityDetails.attentionPoints.length > 0 && (
+                  <div className="mt-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--ds-text-5)" }}>
+                      Serviços que exigem validação
+                    </p>
+                    <div className="space-y-2">
+                      {complexityDetails.attentionPoints.slice(0, 3).map((item) => (
+                        <div key={`${item.service}-${item.status}`} className="flex items-start gap-2 rounded-lg border p-2.5" style={{ borderColor: "var(--ds-border-sub)" }}>
+                          <AlertCircle size={13} className="mt-0.5 flex-shrink-0 text-amber-400" />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-xs font-semibold" style={{ color: "var(--ds-text)" }}>{item.service}</span>
+                              <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-amber-300 bg-amber-400/10">
+                                {migrationStatusLabel(item.status)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] leading-relaxed" style={{ color: "var(--ds-text-3)" }}>{item.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {complexityDetails.attentionPoints.length > 3 && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-[var(--ds-accent)]">
+                          Ver outros {complexityDetails.attentionPoints.length - 3} serviços
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          {complexityDetails.attentionPoints.slice(3).map((item) => (
+                            <div key={`${item.service}-${item.status}`} className="rounded-lg border p-2.5" style={{ borderColor: "var(--ds-border-sub)" }}>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-xs font-semibold" style={{ color: "var(--ds-text)" }}>{item.service}</span>
+                                <span className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-amber-300 bg-amber-400/10">
+                                  {migrationStatusLabel(item.status)}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 text-[11px] leading-relaxed" style={{ color: "var(--ds-text-3)" }}>{item.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            <p className="mt-3 text-[10px] leading-relaxed" style={{ color: "var(--ds-text-5)" }}>
+              {complexityDetails.disclaimer}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Motivos */}
@@ -544,6 +648,7 @@ export default function DashboardPage() {
 
   /* ── Derivações ─────────────────────────────────── */
   const servicos  = data ? (showAll ? data.services : data.services.slice(0, 6)) : [];
+  const categorias = data?.categories ?? [];
   const alternatives = data?.crossCloud.filter(
     (row) => !row.isCurrentProvider && row.savingPct != null && row.savingPct > 0,
   ) ?? [];
@@ -789,42 +894,72 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Breakdown por serviço */}
+          {/* Breakdowns de custo */}
           {servicos.length > 0 && (
-            <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
-              <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Breakdown por Serviço</h3>
-              <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>Distribuição de custos no período</p>
-              <div className="space-y-3">
-                {servicos.map((s, i) => {
-                  const cor = SERVICE_COLORS[i % SERVICE_COLORS.length];
-                  return (
-                    <div key={s.name}>
-                      <div className="flex items-center justify-between mb-1.5 gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: cor }} />
-                          <span className="text-xs sm:text-sm truncate" style={{ color: "var(--ds-muted)" }}>{s.name}</span>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+              <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
+                <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Breakdown por Serviço</h3>
+                <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>Distribuição de custos no período</p>
+                <div className="space-y-3">
+                  {servicos.map((s, i) => {
+                    const cor = SERVICE_COLORS[i % SERVICE_COLORS.length];
+                    return (
+                      <div key={s.name}>
+                        <div className="flex items-center justify-between mb-1.5 gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: cor }} />
+                            <span className="text-xs sm:text-sm truncate" style={{ color: "var(--ds-muted)" }}>{s.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>{s.percentage.toFixed(1)}%</span>
+                            <span className="text-xs sm:text-sm font-bold" style={{ color: "var(--ds-text)" }}>{moeda(s.cost, data.currency)}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>{s.percentage.toFixed(1)}%</span>
-                          <span className="text-xs sm:text-sm font-bold" style={{ color: "var(--ds-text)" }}>{moeda(s.cost, data.currency)}</span>
+                        <div className="w-full rounded-full h-1.5" style={{ background: "var(--ds-bar-bg)" }}>
+                          <div className="h-1.5 rounded-full transition-all duration-700"
+                            style={{ width: `${Math.min(s.percentage, 100)}%`, background: cor }} />
                         </div>
                       </div>
-                      <div className="w-full rounded-full h-1.5" style={{ background: "var(--ds-bar-bg)" }}>
-                        <div className="h-1.5 rounded-full transition-all duration-700"
-                          style={{ width: `${s.percentage}%`, background: cor }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                {data.services.length > 6 && (
+                  <button onClick={() => setShowAll(!showAll)}
+                    className="mt-4 flex items-center gap-1.5 text-xs text-[var(--ds-accent)] hover:underline">
+                    {showAll
+                      ? <><ChevronUp size={12} /> Ver menos</>
+                      : <><ChevronDown size={12} /> Ver todos os {data.services.length} serviços</>}
+                  </button>
+                )}
               </div>
-              {data.services.length > 6 && (
-                <button onClick={() => setShowAll(!showAll)}
-                  className="mt-4 flex items-center gap-1.5 text-xs text-[var(--ds-accent)] hover:underline">
-                  {showAll
-                    ? <><ChevronUp size={12} /> Ver menos</>
-                    : <><ChevronDown size={12} /> Ver todos os {data.services.length} serviços</>}
-                </button>
-              )}
+
+              <div className="border rounded-2xl p-4 sm:p-6" style={{ background: "var(--ds-card)", borderColor: "var(--ds-border)" }}>
+                <h3 className="font-bold text-sm mb-0.5" style={{ color: "var(--ds-text)" }}>Breakdown por Categoria</h3>
+                <p className="text-xs mb-4" style={{ color: "var(--ds-text-5)" }}>Custos consolidados por tipo de recurso</p>
+                <div className="space-y-3">
+                  {categorias.map((categoria, i) => {
+                    const cor = SERVICE_COLORS[i % SERVICE_COLORS.length];
+                    return (
+                      <div key={categoria.name}>
+                        <div className="flex items-center justify-between mb-1.5 gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: cor }} />
+                            <span className="text-xs sm:text-sm truncate" style={{ color: "var(--ds-muted)" }}>{categoria.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-[10px]" style={{ color: "var(--ds-text-4)" }}>{categoria.percentage.toFixed(1)}%</span>
+                            <span className="text-xs sm:text-sm font-bold" style={{ color: "var(--ds-text)" }}>{moeda(categoria.cost, data.currency)}</span>
+                          </div>
+                        </div>
+                        <div className="w-full rounded-full h-1.5" style={{ background: "var(--ds-bar-bg)" }}>
+                          <div className="h-1.5 rounded-full transition-all duration-700"
+                            style={{ width: `${Math.min(categoria.percentage, 100)}%`, background: cor }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 

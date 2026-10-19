@@ -3,11 +3,12 @@ import {
   BillingParseError,
   parseBillingFile,
 } from "@/lib/billing-parser";
+import { normalizeBillingCurrency } from "@/lib/currency-normalizer";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const MAX_CONTENT_LENGTH = 400_000;
+const MAX_CONTENT_LENGTH = 2_000_000;
 const BACKEND_API_URL = (
   process.env.BACKEND_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
@@ -35,12 +36,13 @@ export async function POST(req: NextRequest) {
     }
     if (content.length > MAX_CONTENT_LENGTH) {
       return NextResponse.json(
-        { error: "Arquivo muito grande. Máximo 400 KB de texto." },
+        { error: "Arquivo muito grande. Máximo 2 MB de texto." },
         { status: 413 },
       );
     }
 
-    const billing = parseBillingFile(content, filename, targetRegion);
+    const parsedBilling = parseBillingFile(content, filename, targetRegion);
+    const billing = await normalizeBillingCurrency(parsedBilling, req.signal);
     const upstream = await fetch(
       `${BACKEND_API_URL}/billing/analyze/stream`,
       {

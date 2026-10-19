@@ -213,29 +213,44 @@ function rowToLineItem(
   provider: CloudProvider,
   index: number,
 ): DatedLineItem | null {
+  const recordType = pickText(row, RECORD_TYPE_FIELDS);
+  if (/total$/i.test(recordType)) return null;
+
   const serviceName = pickText(row, SERVICE_NAME_FIELDS);
   const serviceCode = pickText(row, SERVICE_CODE_FIELDS) || serviceName;
-  const region = pickText(row, REGION_FIELDS);
+  const usageType = pickText(row, USAGE_TYPE_FIELDS);
+  const region =
+    pickText(row, REGION_FIELDS) ||
+    inferRegion(provider, serviceCode, usageType);
   const cost = pickNumber(row, COST_FIELDS);
   if (!serviceCode || !region || cost == null) return null;
 
-  const usageType = pickText(row, USAGE_TYPE_FIELDS);
   const explicitSkuName = pickText(row, SKU_NAME_FIELDS);
+  const description = pickText(row, DESCRIPTION_FIELDS);
   const nativeSkuName =
-    explicitSkuName || extractNativeSku(provider, usageType, pickText(row, DESCRIPTION_FIELDS));
+    explicitSkuName || extractNativeSku(provider, usageType, description);
   const quantity = pickNumber(row, QUANTITY_FIELDS) ?? 0;
-  const currency = (pickText(row, CURRENCY_FIELDS) || "USD").toUpperCase();
+  const currency = (
+    pickText(row, CURRENCY_FIELDS) || inferCurrencyFromHeaders(row) || "USD"
+  ).toUpperCase();
   const startDate = optionalDate(pickText(row, START_DATE_FIELDS));
   const endDate = optionalDate(pickText(row, END_DATE_FIELDS));
   const attributes: Record<string, string | number | boolean> = {};
   const vcpu = pickNumber(row, VCPU_FIELDS);
   const memoryGiB = pickNumber(row, MEMORY_FIELDS);
-  const architecture = pickText(row, ARCHITECTURE_FIELDS);
+  const architecture =
+    pickText(row, ARCHITECTURE_FIELDS) ||
+    inferArchitecture(provider, nativeSkuName);
   const operatingSystem = pickText(row, OPERATING_SYSTEM_FIELDS);
+  const operation = pickText(row, OPERATION_FIELDS);
+  const databaseEngine =
+    pickText(row, DATABASE_ENGINE_FIELDS) ||
+    inferDatabaseEngine(provider, serviceCode, description, operation);
   if (vcpu != null) attributes.vcpu = vcpu;
   if (memoryGiB != null) attributes.memoryGiB = memoryGiB;
   if (architecture) attributes.architecture = architecture;
   if (operatingSystem) attributes.operatingSystem = operatingSystem;
+  if (databaseEngine) attributes.databaseEngine = databaseEngine;
 
   return compactObject({
     sourceKey: `file-row-${index + 1}`,
@@ -247,11 +262,11 @@ function rowToLineItem(
     nativeSkuName: nativeSkuName || undefined,
     nativeProductId: pickText(row, PRODUCT_ID_FIELDS) || undefined,
     usageType: usageType || undefined,
-    operation: pickText(row, OPERATION_FIELDS) || undefined,
+    operation: operation || undefined,
     region,
     resourceId: pickText(row, RESOURCE_ID_FIELDS) || undefined,
     quantity,
-    unit: pickText(row, UNIT_FIELDS) || "unit",
+    unit: pickText(row, UNIT_FIELDS) || inferUnit(provider, usageType),
     cost,
     currency,
     attributes: Object.keys(attributes).length ? attributes : undefined,
@@ -446,13 +461,28 @@ function finiteNumber(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   const raw = text(value).replace(/[^\d,.-]/g, "");
   if (!raw) return null;
-  const normalized = /^-?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(raw)
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : /^-?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(raw)
-      ? raw.replace(/,/g, "")
-      : raw.replace(",", ".");
+  const normalized = normalizeNumber(raw);
   const result = Number(normalized);
   return Number.isFinite(result) ? result : null;
+}
+
+function normalizeNumber(value: string): string {
+  const commaCount = (value.match(/,/g) ?? []).length;
+  const dotCount = (value.match(/\./g) ?? []).length;
+
+  if (commaCount && dotCount) {
+    return value.lastIndexOf(",") > value.lastIndexOf(".")
+      ? value.replace(/\./g, "").replace(",", ".")
+      : value.replace(/,/g, "");
+  }
+  if (commaCount > 1 && /^-?\d{1,3}(?:,\d{3})+$/.test(value)) {
+    return value.replace(/,/g, "");
+  }
+  if (dotCount > 1 && /^-?\d{1,3}(?:\.\d{3})+$/.test(value)) {
+    return value.replace(/\./g, "");
+  }
+  if (commaCount === 1) return value.replace(",", ".");
+  return value;
 }
 
 function extractNativeSku(
@@ -462,9 +492,13 @@ function extractNativeSku(
 ): string {
   const source = `${usageType} ${description}`;
   if (provider === "AWS") {
-    return (
-      source.match(/(?:db\.)?[a-z][a-z0-9]*\.[a-z0-9]+/i)?.[0] ?? ""
-    );
+    const sku =
+      source.match(
+        /\b(?:(?:db|cache)\.)?[a-z]+\d[a-z0-9-]*\.(?:\d+xlarge|\d+xl|xlarge|xl|nano|micro|small|medium|large|metal)\b/i,
+      )?.[0] ?? "";
+    return sku
+      .replace(/\.(\d+)xl$/i, ".$1xlarge")
+      .replace(/\.xl$/i, ".xlarge");
   }
   if (provider === "GCP") {
     return (
@@ -477,6 +511,84 @@ function extractNativeSku(
     return source.match(/Standard_[A-Za-z0-9_]+/i)?.[0] ?? "";
   }
   return source.match(/VM\.[A-Za-z0-9.]+(?:\.Flex)?/i)?.[0] ?? "";
+}
+
+function inferRegion(
+  provider: CloudProvider,
+  serviceCode: string,
+  usageType: string,
+): string {
+  if (provider === "GCP") return "global";
+  if (provider !== "AWS") return "";
+
+  const explicitRegion = usageType.match(
+    /^(af|ap|ca|eu|il|me|mx|sa|us)-(?:gov-)?[a-z0-9-]+-\d(?=-|:|$)/i,
+  )?.[0];
+  if (explicitRegion) return explicitRegion.toLowerCase();
+
+  const billingPrefix = usageType.match(/^([A-Z0-9]+)-/)?.[1];
+  if (billingPrefix && AWS_BILLING_REGION_PREFIXES[billingPrefix]) {
+    return AWS_BILLING_REGION_PREFIXES[billingPrefix];
+  }
+
+  if (AWS_GLOBAL_SERVICE_CODES.has(normalizeKey(serviceCode))) return "global";
+
+  // Nos relatórios de billing da AWS, a região us-east-1 omite o prefixo.
+  return usageType ? "us-east-1" : "";
+}
+
+function inferCurrencyFromHeaders(row: NormalizedRow): string {
+  if (row.has("unroundedcostr") || row.has("costr")) return "BRL";
+  if (row.has("unroundedcostusd") || row.has("costusd")) return "USD";
+  if (row.has("unroundedcosteur") || row.has("costeur")) return "EUR";
+  return "";
+}
+
+function inferUnit(provider: CloudProvider, usageType: string): string {
+  if (provider !== "AWS" || !usageType) return "unit";
+  if (/gb-?seconds?/i.test(usageType)) return "GB-Seconds";
+  if (/v?cpu-?hours?|vcpu-?hrs?/i.test(usageType)) return "vCPU-Hours";
+  if (/bytehrs|storage.*bytes?/i.test(usageType)) return "GB-Mo";
+  if (/bytes?/i.test(usageType)) return "GB";
+  if (/iops/i.test(usageType)) return "IOPS-Mo";
+  if (/requests?|queries|api-?calls?/i.test(usageType)) return "Requests";
+  if (
+    /boxusage|spotusage|heavyusage|instanceusage|hostusage|nodeusage|hours?|hrs?/i.test(
+      usageType,
+    )
+  ) {
+    return "Hrs";
+  }
+  return "unit";
+}
+
+function inferArchitecture(
+  provider: CloudProvider,
+  nativeSkuName: string,
+): string {
+  if (provider !== "AWS" || !nativeSkuName) return "";
+  const family = nativeSkuName
+    .replace(/^(?:db|cache)\./i, "")
+    .split(".")[0]
+    .toLowerCase();
+  return /\d+g[a-z]*$/.test(family) ? "arm64" : "x86_64";
+}
+
+function inferDatabaseEngine(
+  provider: CloudProvider,
+  serviceCode: string,
+  description: string,
+  operation: string,
+): string {
+  if (provider !== "AWS" || normalizeKey(serviceCode) !== "amazonrds") {
+    return "";
+  }
+  const evidence = `${description} ${operation}`.toLowerCase();
+  if (evidence.includes("postgres") || /:(?:0014|0021)\b/.test(evidence)) {
+    return "PostgreSQL";
+  }
+  if (evidence.includes("mysql") || /:0002\b/.test(evidence)) return "MySQL";
+  return "";
 }
 
 function parseJson(content: string): unknown {
@@ -575,6 +687,7 @@ const SERVICE_NAME_FIELDS = [
 ];
 const SERVICE_CODE_FIELDS = [
   "serviceCode",
+  "ProductCode",
   "lineItem/ProductCode",
   "product/servicecode",
   "service.id",
@@ -594,8 +707,12 @@ const REGION_FIELDS = [
 ];
 const COST_FIELDS = [
   "cost",
+  "Unrounded Cost (R$)",
+  "Cost (R$)",
   "lineItem/UnblendedCost",
   "lineItem/BlendedCost",
+  "TotalCost",
+  "CostBeforeTax",
   "CostInBillingCurrency",
   "PreTaxCost",
   "costAmount",
@@ -669,7 +786,9 @@ const RESOURCE_ID_FIELDS = [
 const START_DATE_FIELDS = [
   "periodStart",
   "bill/BillingPeriodStartDate",
+  "BillingPeriodStartDate",
   "lineItem/UsageStartDate",
+  "UsageStartDate",
   "usage_start_time",
   "UsageDateTime",
   "Date",
@@ -678,12 +797,15 @@ const START_DATE_FIELDS = [
 const END_DATE_FIELDS = [
   "periodEnd",
   "bill/BillingPeriodEndDate",
+  "BillingPeriodEndDate",
   "lineItem/UsageEndDate",
+  "UsageEndDate",
   "usage_end_time",
   "endTime",
 ];
 const DESCRIPTION_FIELDS = [
   "description",
+  "ItemDescription",
   "lineItem/LineItemDescription",
   "sku.description",
   "ProductName",
@@ -706,3 +828,53 @@ const OPERATING_SYSTEM_FIELDS = [
   "product/operatingSystem",
   "os",
 ];
+const DATABASE_ENGINE_FIELDS = [
+  "databaseEngine",
+  "product/databaseEngine",
+  "engine",
+];
+const RECORD_TYPE_FIELDS = ["recordType", "lineItem/LineItemType"];
+
+const AWS_GLOBAL_SERVICE_CODES = new Set(
+  [
+    "AWS Cost Explorer",
+    "AWS Support",
+    "Amazon CloudFront",
+    "Amazon Route 53",
+    "Savings Plans for AWS Compute usage",
+    "Tax",
+  ].map(normalizeKey),
+);
+
+const AWS_BILLING_REGION_PREFIXES: Record<string, string> = {
+  AFS1: "af-south-1",
+  APN1: "ap-northeast-1",
+  APN2: "ap-northeast-2",
+  APN3: "ap-northeast-3",
+  APE1: "ap-east-1",
+  APS1: "ap-southeast-1",
+  APS2: "ap-southeast-2",
+  APS3: "ap-south-1",
+  APS4: "ap-southeast-3",
+  APS5: "ap-southeast-4",
+  APS6: "ap-south-2",
+  CAN1: "ca-central-1",
+  CAW1: "ca-west-1",
+  EU: "eu-west-1",
+  EUC1: "eu-central-1",
+  EUC2: "eu-central-2",
+  EUN1: "eu-north-1",
+  EUS1: "eu-south-1",
+  EUS2: "eu-south-2",
+  EUW2: "eu-west-2",
+  EUW3: "eu-west-3",
+  ILC1: "il-central-1",
+  MEC1: "me-central-1",
+  MES1: "me-south-1",
+  MXC1: "mx-central-1",
+  SAE1: "sa-east-1",
+  USE1: "us-east-1",
+  USE2: "us-east-2",
+  USW1: "us-west-1",
+  USW2: "us-west-2",
+};
