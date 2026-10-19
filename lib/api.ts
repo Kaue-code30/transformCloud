@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 function humanizeError(status: number, rawMessage: unknown): string {
   // class-validator retorna array de strings
